@@ -184,7 +184,7 @@ const HABITS = [
   { id: "work1", label: "Work block 1", time: "8:30 – Dhuhr", band: "Morning work",
     note: { sat: "No PhD work", sun: "Plan week + meal prep with Taif" }, skip: { sat: true } },
   { id: "dhuhr", label: "Dhuhr", time: "~12:00", band: "Midday",
-    dayLabel: { fri: "Jumu'ah prayer 🕌" }, dayTime: { fri: "Sussex prayer room · be there 12:10 · starts 12:20" } },
+    dayLabel: { fri: "صلاة الجمعة 🕌" }, dayTime: { fri: "Sussex prayer room · be there 12:10 · starts 12:20" } },
   { id: "lunch", label: "Lunch", band: "Midday" },
   { id: "nap", label: "Nap ≤ 30 min", time: "1–2 PM", band: "Midday" },
   { id: "coffee", label: "Last coffee", time: "before 2:30 PM", band: "Midday" },
@@ -276,7 +276,7 @@ function summary() {
     const m = state.marks[state.day + ":" + h.id] || "";
     const mark = m === "yes" ? "✓" : m === "no" ? "✗" : "—";
     const extra = h.note && h.note[state.day] ? " (" + h.note[state.day] + ")" : "";
-    lines.push(h.label + extra + ": " + mark);
+    lines.push(((h.dayLabel && h.dayLabel[state.day]) || h.label) + extra + ": " + mark);
   });
   lines.push("Cigarettes: " + (state.cigs[state.day] || "—"));
   lines.push("Energy 1–10: " + (state.energy[state.day] || "—"));
@@ -303,10 +303,10 @@ function render() {
       const time = tt ? '<span class="time">' + tt + '</span>' : "";
       const lbl = (h.dayLabel && h.dayLabel[state.day]) || h.label;
       if (h.skip && h.skip[state.day]) {
-        html += '<div class="row static"><div class="mark">—</div><div class="label">' + h.label + time + note + '</div></div>';
+        html += '<div class="row static"><div class="mark">—</div><div class="label">' + lbl + time + note + '</div></div>';
         return;
       }
-      html += '<button class="row" data-habit="' + h.id + '"><div class="mark ' + m + '">' + markText(m) + '</div><div class="label">' + h.label + time + note + '</div></button>';
+      html += '<button class="row" data-habit="' + h.id + '"><div class="mark ' + m + '">' + markText(m) + '</div><div class="label">' + lbl + time + note + '</div></button>';
     });
     html += '</section>';
   });
