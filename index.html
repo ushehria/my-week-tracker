@@ -183,7 +183,8 @@ const HABITS = [
   { id: "breakfast", label: "Breakfast", time: "before 8:30", band: "Morning" },
   { id: "work1", label: "Work block 1", time: "8:30 – Dhuhr", band: "Morning work",
     note: { sat: "No PhD work", sun: "Plan week + meal prep with Taif" }, skip: { sat: true } },
-  { id: "dhuhr", label: "Dhuhr", time: "~12:00", band: "Midday" },
+  { id: "dhuhr", label: "Dhuhr", time: "~12:00", band: "Midday",
+    dayLabel: { fri: "Jumu'ah prayer 🕌" }, dayTime: { fri: "Sussex prayer room · be there 12:10 · starts 12:20" } },
   { id: "lunch", label: "Lunch", band: "Midday" },
   { id: "nap", label: "Nap ≤ 30 min", time: "1–2 PM", band: "Midday" },
   { id: "coffee", label: "Last coffee", time: "before 2:30 PM", band: "Midday" },
@@ -298,7 +299,9 @@ function render() {
       const key = state.day + ":" + h.id;
       const m = state.marks[key] || "";
       const note = h.note && h.note[state.day] ? '<span class="note">' + h.note[state.day] + '</span>' : "";
-      const time = h.time ? '<span class="time">' + h.time + '</span>' : "";
+      const tt = (h.dayTime && h.dayTime[state.day]) || h.time;
+      const time = tt ? '<span class="time">' + tt + '</span>' : "";
+      const lbl = (h.dayLabel && h.dayLabel[state.day]) || h.label;
       if (h.skip && h.skip[state.day]) {
         html += '<div class="row static"><div class="mark">—</div><div class="label">' + h.label + time + note + '</div></div>';
         return;
