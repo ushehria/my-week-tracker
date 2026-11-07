@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2f7f86">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
-<title>My Week · 4–8 Nov</title>
+<title>My Week</title>
 <style>
   :root {
     --bg: #f7f8f8;
@@ -41,27 +41,38 @@
     padding-top: max(14px, env(safe-area-inset-top));
   }
   h1 { margin: 0; font-size: 22px; }
-  .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .sub, .sync { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
   .days {
     display: flex; gap: 6px; overflow-x: auto; padding: 10px 16px 0;
     -webkit-overflow-scrolling: touch;
   }
+  header .days { padding-left: 0; padding-right: 0; gap: 4px; }
+  header .days button { flex: 1 1 0; min-width: 0; padding: 6px 0; }
   .days button {
     flex: 0 0 auto;
     border: 1px solid var(--line);
     background: var(--card);
-    border-radius: 999px;
-    padding: 8px 14px;
+    border-radius: 14px;
+    padding: 6px 10px;
     font: inherit;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--ink);
+    display: grid;
+    justify-items: center;
+    line-height: 1.1;
+    min-width: 46px;
   }
+  .days .dom { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .days button.active .dom { color: #fff; }
+  .days button.today:not(.active) { box-shadow: inset 0 0 0 2px var(--ac); }
   .days button.active {
     background: var(--ac);
     border-color: var(--ac);
     color: #fff;
   }
-  main { padding: 8px 16px 120px; }
+  main { padding: 8px 16px 160px; }
+  section, .activity { scroll-margin-top: 168px; scroll-margin-bottom: 96px; }
+  .day-heading { margin: 12px 0 0; font-size: 20px; }
   section {
     background: var(--card);
     border: 1px solid var(--line);
@@ -101,7 +112,9 @@
   .mark.yes { background: var(--yes-bg); color: var(--yes); border-color: #b9e4cb; }
   .mark.no { background: var(--no-bg); color: var(--no); border-color: #f3c0bb; }
   .label { flex: 1; font-weight: 600; }
-  .time, .note { display: block; font-weight: 400; color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .time, .note, .hint { display: block; font-weight: 400; color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .hint { margin: 0; padding: 0 14px 8px; }
+  .activity { padding: 8px 14px 14px; display: grid; gap: 10px; border-top: 1px solid var(--line); }
   .fields { padding: 8px 14px 14px; display: grid; gap: 10px; }
   label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
   input, textarea {
@@ -127,7 +140,7 @@
   .saved {
     color: var(--muted);
     font-size: 12px;
-    padding: 0 16px 8px;
+    padding: 8px 16px 0;
     text-align: center;
   }
   #summaryBox {
@@ -136,231 +149,35 @@
     border-radius: 12px;
     padding: 12px;
     font-size: 13px;
-    display: none;
+    margin: 0;
   }
   footer-bar {
     position: fixed; left: 0; right: 0; bottom: 0;
     background: rgba(247,248,248,.96);
     border-top: 1px solid var(--line);
     padding: 8px 10px max(10px, env(safe-area-inset-bottom));
-    display: flex; gap: 6px; justify-content: center;
+    display: flex; gap: 6px;
   }
-  footer-bar button {
-    flex: 1; max-width: 72px;
-    border: 1px solid var(--line);
-    background: #fff;
+  footer-bar .days { flex: 1; width: 100%; padding: 0; }
+  footer-bar .days button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 8px 0;
     border-radius: 12px;
-    padding: 10px 0;
-    font: inherit;
-    font-weight: 700;
-    font-size: 13px;
+    font-size: 12px;
   }
-  footer-bar button.active { background: var(--ac); color: #fff; border-color: var(--ac); }
 </style>
 </head>
 <body>
 <header>
-  <h1>My Week · 4–8 Nov</h1>
-  <div class="sub">Tap · → ✓ → ✗. Saves on this phone automatically.</div>
+  <h1 id="title">My Week</h1>
+  <p class="sub" id="sub">Saves on this phone.</p>
+  <div id="sync"></div>
   <div class="days" id="dayTop"></div>
 </header>
 <p class="saved" id="savedMsg">Saved on this phone</p>
 <main id="app"></main>
-<footer-bar id="dayBottom"></footer-bar>
-<script>
-const DAYS = [
-  { id: "wed", label: "Wed 4", short: "Wed" },
-  { id: "thu", label: "Thu 5", short: "Thu" },
-  { id: "fri", label: "Fri 6", short: "Fri" },
-  { id: "sat", label: "Sat 7", short: "Sat" },
-  { id: "sun", label: "Sun 8", short: "Sun" },
-];
-const HABITS = [
-  { id: "fajr", label: "Fajr", time: "~5:45", band: "Morning" },
-  { id: "woke", label: "Woke", time: "6:30–7:00", band: "Morning" },
-  { id: "meds_am", label: "Morning medicines", band: "Morning" },
-  { id: "daylight", label: "Daylight + water", band: "Morning" },
-  { id: "breakfast", label: "Breakfast", time: "before 8:30", band: "Morning" },
-  { id: "work1", label: "Work block 1", time: "8:30 – Dhuhr", band: "Morning work",
-    note: { sat: "No PhD work", sun: "Plan week + meal prep with Taif" }, skip: { sat: true } },
-  { id: "dhuhr", label: "Dhuhr", time: "~12:00", band: "Midday",
-    dayLabel: { fri: "صلاة الجمعة 🕌" }, dayTime: { fri: "Sussex prayer room · be there 12:10 · starts 12:20" } },
-  { id: "lunch", label: "Lunch", band: "Midday" },
-  { id: "nap", label: "Nap ≤ 30 min", time: "1–2 PM", band: "Midday" },
-  { id: "coffee", label: "Last coffee", time: "before 2:30 PM", band: "Midday" },
-  { id: "asr", label: "Asr", time: "~2:15", band: "Afternoon" },
-  { id: "work2", label: "Work block 2", band: "Afternoon",
-    note: { fri: "Teach G5039 3–5 PM", sat: "Family outing (Washbrooks)", sun: "Rest / family" } },
-  { id: "maghrib", label: "Maghrib", time: "~4:25", band: "Afternoon" },
-  { id: "exercise", label: "Exercise", band: "Afternoon",
-    note: { wed: "Gym 1 — easy 30–40 min", thu: "Walk 20–30 min after Maghrib", fri: "Gym 2 or walk", sat: "Gym 3 or volleyball", sun: "Optional walk" } },
-  { id: "isha", label: "Isha", time: "~6:00", band: "Evening" },
-  { id: "dinner", label: "Dinner with family", band: "Evening" },
-  { id: "family", label: "Family time", time: "7–9 PM · laptop closed", band: "Evening" },
-  { id: "meds_pm", label: "Evening medicines", time: "~9 PM", band: "Night" },
-  { id: "bed", label: "In bed by 10 PM", band: "Night" },
-  { id: "water", label: "Water ~2 L", band: "Daily totals" },
-];
-const BANDS = ["Morning","Morning work","Midday","Afternoon","Evening","Night","Daily totals"];
-const STORE = "abdullah-my-week-4-8-nov-v1";
-
-function todayDefault() {
-  const d = new Date().getDay(); // 0 Sun .. 4 Thu
-  const map = { 3: "wed", 4: "thu", 5: "fri", 6: "sat", 0: "sun" };
-  return map[d] || "thu";
-}
-
-function load() {
-  try {
-    const raw = localStorage.getItem(STORE);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch (e) { return null; }
-}
-
-function blankState() {
-  return {
-    day: todayDefault(),
-    marks: {},
-    cigs: { wed:"", thu:"", fri:"", sat:"", sun:"" },
-    energy: { wed:"", thu:"", fri:"", sat:"", sun:"" },
-    note: "",
-  };
-}
-
-let state = Object.assign(blankState(), load() || {});
-
-function save() {
-  localStorage.setItem(STORE, JSON.stringify(state));
-  const el = document.getElementById("savedMsg");
-  el.textContent = "Saved on this phone · " + new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
-}
-
-function cycle(m) {
-  if (m === "yes") return "no";
-  if (m === "no") return "";
-  return "yes";
-}
-
-function markText(m) {
-  if (m === "yes") return "✓";
-  if (m === "no") return "✗";
-  return "·";
-}
-
-function setDay(id) {
-  state.day = id;
-  save();
-  render();
-}
-
-function renderDays(host) {
-  host.innerHTML = "";
-  DAYS.forEach(d => {
-    const b = document.createElement("button");
-    b.textContent = d.short;
-    if (d.id === state.day) b.className = "active";
-    b.onclick = () => setDay(d.id);
-    host.appendChild(b);
-  });
-}
-
-function summary() {
-  const day = DAYS.find(d => d.id === state.day);
-  const lines = ["Week marks — " + day.label];
-  HABITS.forEach(h => {
-    if (h.skip && h.skip[state.day]) {
-      lines.push(h.label + ": " + (h.note && h.note[state.day] || "—"));
-      return;
-    }
-    const m = state.marks[state.day + ":" + h.id] || "";
-    const mark = m === "yes" ? "✓" : m === "no" ? "✗" : "—";
-    const extra = h.note && h.note[state.day] ? " (" + h.note[state.day] + ")" : "";
-    lines.push(((h.dayLabel && h.dayLabel[state.day]) || h.label) + extra + ": " + mark);
-  });
-  lines.push("Cigarettes: " + (state.cigs[state.day] || "—"));
-  lines.push("Energy 1–10: " + (state.energy[state.day] || "—"));
-  if (state.note.trim()) lines.push("Note: " + state.note.trim());
-  lines.push("(from My Week phone app)");
-  return lines.join("\n");
-}
-
-function render() {
-  renderDays(document.getElementById("dayTop"));
-  renderDays(document.getElementById("dayBottom"));
-  const app = document.getElementById("app");
-  const dayMeta = DAYS.find(d => d.id === state.day);
-  let html = "";
-  BANDS.forEach(band => {
-    const items = HABITS.filter(h => h.band === band);
-    if (!items.length) return;
-    html += '<section><h2>' + band + '</h2>';
-    items.forEach(h => {
-      const key = state.day + ":" + h.id;
-      const m = state.marks[key] || "";
-      const note = h.note && h.note[state.day] ? '<span class="note">' + h.note[state.day] + '</span>' : "";
-      const tt = (h.dayTime && h.dayTime[state.day]) || h.time;
-      const time = tt ? '<span class="time">' + tt + '</span>' : "";
-      const lbl = (h.dayLabel && h.dayLabel[state.day]) || h.label;
-      if (h.skip && h.skip[state.day]) {
-        html += '<div class="row static"><div class="mark">—</div><div class="label">' + lbl + time + note + '</div></div>';
-        return;
-      }
-      html += '<button class="row" data-habit="' + h.id + '"><div class="mark ' + m + '">' + markText(m) + '</div><div class="label">' + lbl + time + note + '</div></button>';
-    });
-    html += '</section>';
-  });
-  html += '<section><h2>Daily totals</h2><div class="fields">' +
-    '<label>Cigarettes (count)<input id="cigs" inputmode="numeric" value="' + (state.cigs[state.day] || "") + '"></label>' +
-    '<label>Energy 1–10<input id="energy" inputmode="numeric" value="' + (state.energy[state.day] || "") + '"></label>' +
-    '<label>Note for Lifestyle<textarea id="note" rows="3" placeholder="e.g. slept late, skipped nap">' + (state.note || "").replace(/</g,"&lt;") + '</textarea></label>' +
-    '</div><div class="actions">' +
-    '<button class="btn" id="build">Build summary to paste in chat</button>' +
-    '<button class="btn secondary" id="copy" style="display:none">Copy summary</button>' +
-    '<pre id="summaryBox"></pre>' +
-    '<button class="btn secondary" id="clearDay">Clear ' + dayMeta.short + ' marks</button>' +
-    '</div></section>';
-  app.innerHTML = html;
-
-  app.querySelectorAll("button.row[data-habit]").forEach(btn => {
-    btn.onclick = () => {
-      const id = btn.getAttribute("data-habit");
-      const key = state.day + ":" + id;
-      state.marks[key] = cycle(state.marks[key] || "");
-      save();
-      render();
-    };
-  });
-  document.getElementById("cigs").oninput = (e) => { state.cigs[state.day] = e.target.value; save(); };
-  document.getElementById("energy").oninput = (e) => { state.energy[state.day] = e.target.value; save(); };
-  document.getElementById("note").oninput = (e) => { state.note = e.target.value; save(); };
-  document.getElementById("clearDay").onclick = () => {
-    HABITS.forEach(h => { delete state.marks[state.day + ":" + h.id]; });
-    state.cigs[state.day] = "";
-    state.energy[state.day] = "";
-    save();
-    render();
-  };
-  const box = document.getElementById("summaryBox");
-  const copyBtn = document.getElementById("copy");
-  document.getElementById("build").onclick = () => {
-    box.style.display = "block";
-    box.textContent = summary();
-    copyBtn.style.display = "block";
-  };
-  copyBtn.onclick = async () => {
-    try {
-      await navigator.clipboard.writeText(summary());
-      copyBtn.textContent = "Copied";
-      setTimeout(() => { copyBtn.textContent = "Copy summary"; }, 1200);
-    } catch (e) {
-      copyBtn.textContent = "Select text above";
-    }
-  };
-}
-
-save();
-render();
-</script>
+<footer-bar><div class="days" id="dayBottom"></div></footer-bar>
+<script type="module" src="./app.js"></script>
 </body>
 </html>
