@@ -16,6 +16,34 @@ export function dayView({ plan, isoDate, dayRecord }) {
     }))
     .filter((band) => band.items.length > 0);
 
+  const suggestions = layout.windows || [];
+  const saved = new Map((record.activities || []).map((item) => [item.id, item]));
+  const suggestionIds = new Set(suggestions.map((item) => item.id));
+  for (const spec of suggestions) {
+    const savedItem = saved.get(spec.id);
+    const windowItem = {
+      kind: "window",
+      id: spec.id,
+      label: spec.label,
+      time: spec.hint || "",
+      note: "",
+      start: savedItem ? savedItem.start || "" : spec.start || "",
+      end: savedItem ? savedItem.end || "" : spec.end || "",
+      place: savedItem ? savedItem.place || "" : "",
+      duration: savedItem ? savedItem.duration || "" : "",
+      suggested: true,
+    };
+    let placed = false;
+    for (const band of bands) {
+      const index = band.items.findIndex((item) => item.id === spec.after);
+      if (index === -1) continue;
+      band.items.splice(index + 1, 0, windowItem);
+      placed = true;
+      break;
+    }
+    if (!placed && bands[0]) bands[0].items.push(windowItem);
+  }
+
   return {
     isoDate,
     layout: dayPlan.layout,
@@ -25,13 +53,15 @@ export function dayView({ plan, isoDate, dayRecord }) {
       ? {
           enabled: true,
           fields: ACTIVITY_FIELDS.slice(),
-          items: (record.activities || []).map((item) => ({
-            id: item.id,
-            start: item.start || "",
-            end: item.end || "",
-            place: item.place || "",
-            duration: item.duration || "",
-          })),
+          items: (record.activities || [])
+            .filter((item) => !suggestionIds.has(item.id))
+            .map((item) => ({
+              id: item.id,
+              start: item.start || "",
+              end: item.end || "",
+              place: item.place || "",
+              duration: item.duration || "",
+            })),
         }
       : null,
   };

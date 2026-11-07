@@ -11,9 +11,9 @@ import {
   saveState,
   sealDueWeeks,
   setDayValue,
+  recordWindowEdit,
   setMark,
   setWeekNote,
-  updateActivity,
 } from "./store.js";
 import { attemptSync, currentSyncStatus, readSyncConfig } from "./sync.js";
 
@@ -152,9 +152,16 @@ export function startApp(doc, options = {}) {
     const field = target.getAttribute?.("data-field");
     const card = target.closest?.("[data-activity]");
     if (field && card) {
-      commit(updateActivity(state, current.selectedDate, card.getAttribute("data-activity"), {
-        [field]: target.value,
-      }));
+      const activityId = card.getAttribute("data-activity");
+      const shown = current.view.bands.flatMap((band) => band.items).find((item) => item.id === activityId)
+        || current.view.activities?.items.find((item) => item.id === activityId);
+      commit(recordWindowEdit(state, current.selectedDate, {
+        id: activityId,
+        start: shown?.start || "",
+        end: shown?.end || "",
+        place: shown?.place || "",
+        duration: shown?.duration || "",
+      }, field, target.value));
     }
   });
 
@@ -230,6 +237,12 @@ function summaryText(current) {
   if (current.view.banner) lines.push(current.view.banner);
   for (const band of current.view.bands) {
     for (const item of band.items) {
+      if (item.kind === "window") {
+        const range = [item.start, item.end].filter(Boolean).join("–");
+        const detail = [item.time, range, item.place, item.duration].filter(Boolean).join(" · ");
+        lines.push(`${item.label}${detail ? `: ${detail}` : ""}`);
+        continue;
+      }
       const mark = item.mark === "yes" ? "✓" : item.mark === "no" ? "✗" : "—";
       const detail = [item.time, item.note].filter(Boolean).join(" · ");
       lines.push(`${item.label}${detail ? ` (${detail})` : ""}: ${mark}`);

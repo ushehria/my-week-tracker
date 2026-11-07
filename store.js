@@ -89,6 +89,23 @@ export function addActivity(state, iso, activity) {
   return next;
 }
 
+export function recordWindowEdit(state, iso, current, field, value) {
+  const allowed = ["start", "end", "place", "duration"];
+  if (!allowed.includes(field)) return state;
+  const existing = state.weeks?.[weekStartMonday(iso)]?.days?.[iso]?.activities?.find((item) => item.id === current.id);
+  let next = state;
+  if (!existing) {
+    next = addActivity(next, iso, {
+      id: current.id,
+      start: current.start || "",
+      end: current.end || "",
+      place: current.place || "",
+      duration: current.duration || "",
+    });
+  }
+  return updateActivity(next, iso, current.id, { [field]: value });
+}
+
 export function updateActivity(state, iso, activityId, patch) {
   const next = clone(state);
   const week = ensureWeek(next, weekStartMonday(iso));

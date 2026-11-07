@@ -13,6 +13,24 @@ export const PLAN = {
       bands: ["Morning", "Midday", "Afternoon", "Evening", "Night", "Daily totals"],
       banner: "No PhD",
       activities: true,
+      windows: [
+        {
+          id: "morning",
+          after: "breakfast",
+          label: "Morning window",
+          hint: "8:30–Dhuhr",
+          start: "08:30",
+          end: "12:00",
+        },
+        {
+          id: "afternoon",
+          after: "asr",
+          label: "Afternoon window",
+          hint: "2:30–Maghrib",
+          start: "14:30",
+          end: "16:25",
+        },
+      ],
     },
   },
   days: {

@@ -1,7 +1,7 @@
 const FIELD_LABELS = {
   start: "From",
   end: "To",
-  place: "Where you went",
+  place: "Where / activity",
   duration: "Duration",
 };
 
@@ -45,9 +45,14 @@ export function renderMain(model) {
     ? `<section><h2>Open day</h2><div class="row static"><div class="mark">—</div><div class="label">${escapeHtml(model.view.banner)}</div></div></section>`
     : "";
   const bands = model.view.bands
-    .map((band) => `<section><h2>${escapeHtml(band.title)}</h2>${band.items.map(renderHabit).join("")}</section>`)
+    .map((band) => `<section><h2>${escapeHtml(band.title)}</h2>${band.items.map(renderItem).join("")}</section>`)
     .join("");
   return `<h2 class="day-heading">${escapeHtml(model.heading)}</h2>${banner}${bands}${renderActivities(model)}${renderLog(model)}`;
+}
+
+function renderItem(item) {
+  if (item.kind === "window") return renderWindow(item, false);
+  return renderHabit(item);
 }
 
 function renderHabit(item) {
@@ -58,20 +63,26 @@ function renderHabit(item) {
   return `<button type="button" class="row" data-habit="${escapeHtml(item.id)}"><div class="mark${markClass}">${symbol}</div><div class="label">${escapeHtml(item.label)}${time}${note}</div></button>`;
 }
 
+function renderWindow(item, removable) {
+  const fields = ["start", "end", "place", "duration"]
+    .map((field) => {
+      const type = FIELD_TYPES[field] || "text";
+      return `<label>${escapeHtml(FIELD_LABELS[field] || field)}<input type="${type}" data-field="${escapeHtml(field)}" value="${escapeHtml(item[field] || "")}" placeholder="${escapeHtml(FIELD_LABELS[field] || "")}"></label>`;
+    })
+    .join("");
+  const hint = item.time ? `<span class="time">${escapeHtml(item.time)}</span>` : "";
+  const remove = removable
+    ? `<button type="button" class="btn secondary" data-remove-activity="${escapeHtml(item.id)}">Remove</button>`
+    : "";
+  return `<div class="activity" data-activity="${escapeHtml(item.id)}"><div class="window-title"><strong>${escapeHtml(item.label)}</strong>${hint}</div>${fields}${remove}</div>`;
+}
+
 function renderActivities(model) {
   const activities = model.view.activities;
   if (!activities) return "";
-  const cards = activities.items.map((item) => {
-    const fields = activities.fields
-      .map((field) => {
-        const type = FIELD_TYPES[field] || "text";
-        return `<label>${escapeHtml(FIELD_LABELS[field] || field)}<input type="${type}" data-field="${escapeHtml(field)}" value="${escapeHtml(item[field] || "")}" placeholder="${escapeHtml(FIELD_LABELS[field] || "")}"></label>`;
-      })
-      .join("");
-    return `<div class="activity" data-activity="${escapeHtml(item.id)}">${fields}<button type="button" class="btn secondary" data-remove-activity="${escapeHtml(item.id)}">Remove</button></div>`;
-  });
+  const cards = activities.items.map((item) => renderWindow(item, true));
   const empty = cards.length ? "" : `<p class="hint">None yet.</p>`;
-  return `<section class="activities"><h2>Windows</h2><p class="hint">Add a time range, where you went, and how long.</p>${empty}${cards.join("")}<div class="actions"><button type="button" class="btn" id="add-activity">Add a window</button></div></section>`;
+  return `<section class="activities"><h2>Extra windows</h2><p class="hint">Add another time range if you need one.</p>${empty}${cards.join("")}<div class="actions"><button type="button" class="btn" id="add-activity">Add a window</button></div></section>`;
 }
 
 function renderLog(model) {

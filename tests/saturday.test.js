@@ -4,7 +4,7 @@ import { PLAN } from "../plan.js";
 import { dayView } from "../day-view.js";
 import { pageModel } from "../page-model.js";
 import { renderPage } from "../render.js";
-import { addActivity, blankState, updateActivity } from "../store.js";
+import { addActivity, blankState, recordWindowEdit, setMark, updateActivity } from "../store.js";
 
 const blankDay = { marks: {}, activities: [] };
 
@@ -30,6 +30,24 @@ test("Saturday is an open day with no work blocks and no invented outing", () =>
   assert.match(byId.nap.time, /20–30 min/);
   assert.match(byId.family.time, /7–9/);
   assert.equal(byId.bed.time, "9:30–10");
+  assert.equal(byId.morning.kind, "window");
+  assert.equal(byId.morning.time, "8:30–Dhuhr");
+  assert.equal(byId.morning.start, "08:30");
+  assert.equal(byId.morning.end, "12:00");
+  assert.equal(byId.morning.place, "");
+  assert.equal(byId.morning.duration, "");
+  assert.equal(byId.afternoon.kind, "window");
+  assert.equal(byId.afternoon.time, "2:30–Maghrib");
+  assert.equal(byId.afternoon.start, "14:30");
+  assert.equal(byId.afternoon.end, "16:25");
+  assert.equal(byId.afternoon.place, "");
+  const morningBand = view.bands.find((band) => band.items.some((item) => item.id === "breakfast"));
+  const morningIds = morningBand.items.map((item) => item.id);
+  assert.ok(morningIds.indexOf("morning") === morningIds.indexOf("breakfast") + 1);
+  const afternoonBand = view.bands.find((band) => band.items.some((item) => item.id === "asr"));
+  const afternoonIds = afternoonBand.items.map((item) => item.id);
+  assert.ok(afternoonIds.indexOf("afternoon") > afternoonIds.indexOf("asr"));
+  assert.ok(afternoonIds.indexOf("afternoon") < afternoonIds.indexOf("maghrib"));
 });
 
 test("Saturday windows keep an editable time range, place, and duration", () => {
@@ -70,18 +88,54 @@ test("Saturday windows keep an editable time range, place, and duration", () => 
   assert.match(html, /Add a window/);
 });
 
-test("Saturday renders an empty window list until the user adds one", () => {
+test("Saturday shows suggested morning and afternoon windows without saving a log", () => {
+  const state = blankState();
+  const before = structuredClone(state);
   const model = pageModel({
     plan: PLAN,
-    state: blankState(),
+    state,
     selectedDate: "2026-11-07",
     now: new Date("2026-11-07T15:00:00Z"),
     syncStatus: "inactive",
   });
+  assert.deepEqual(state, before);
   const html = renderPage(model);
-  assert.match(html, /Add a window/);
+  assert.match(html, /8:30–Dhuhr/);
+  assert.match(html, /2:30–Maghrib/);
+  assert.match(html, /data-activity="morning"/);
+  assert.match(html, /data-activity="afternoon"/);
+  assert.match(html, /value="08:30"/);
+  assert.match(html, /value="12:00"/);
+  assert.match(html, /value="14:30"/);
+  assert.match(html, /value="16:25"/);
+  assert.match(html, /Where \/ activity/);
+  assert.doesNotMatch(html, /Work block/);
   assert.doesNotMatch(html, /Washbrooks/);
   assert.equal(model.view.activities.items.length, 0);
+  assert.match(html, /Sync off\. Logs stay on this phone\./);
+});
+
+test("editing a suggested window keeps other logs and does not invent a place", () => {
+  let state = setMark(blankState(), "2026-11-04", "fajr", "yes");
+  state = setMark(state, "2026-11-07", "family", "yes");
+  const edited = recordWindowEdit(state, "2026-11-07", {
+    id: "morning",
+    start: "08:30",
+    end: "12:00",
+    place: "",
+    duration: "",
+  }, "place", "library");
+  const day = edited.weeks["2026-11-02"].days["2026-11-07"];
+  assert.deepEqual(day.activities, [
+    { id: "morning", start: "08:30", end: "12:00", place: "library", duration: "" },
+  ]);
+  assert.equal(edited.weeks["2026-11-02"].days["2026-11-04"].marks.fajr, "yes");
+  assert.equal(day.marks.family, "yes");
+  const view = dayView({ plan: PLAN, isoDate: "2026-11-07", dayRecord: day });
+  const morning = view.bands.flatMap((band) => band.items).find((item) => item.id === "morning");
+  assert.equal(morning.place, "library");
+  assert.equal(morning.start, "08:30");
+  assert.equal(view.activities.items.some((item) => item.id === "morning"), false);
 });
 
 test("activity text is escaped", () => {
