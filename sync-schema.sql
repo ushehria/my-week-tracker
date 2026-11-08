@@ -1,0 +1,15 @@
+-- Phone sync contract for the existing Supabase project.
+-- No new tables are required for code sign-in.
+-- The phone inserts only into entry_revisions and client_snapshots.
+-- weekly_archives is written by the bot, not by the phone.
+-- current_entries is the latest revision per user, date, and field_key.
+-- A deleted row stays as a tombstone. A repeated client_rev_id is already stored.
+
+-- Bot archive routine, Sunday 23:00 Europe/London:
+-- 1. Read current_entries for the Monday week_start.
+-- 2. Read the newest client_snapshots row with kind = 'plan' for that week_start.
+-- 3. Insert weekly_archives with the next archive_version for (user_id, week_start).
+--    plan_snapshot is the plan payload. entries is the current field map.
+--    Do not overwrite an existing archive_version.
+-- 4. Leave entry_revisions in place. The phone does not delete its local log
+--    when a revision is acknowledged.

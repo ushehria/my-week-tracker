@@ -1,11 +1,14 @@
 import { PLAN } from "./plan.js";
 import { LEGACY_PLAN } from "./legacy-plan.js";
+import { SYNC_OWNER_EMAIL } from "./sync-public.js";
+import { queueBootstrap, queueChanges } from "./sync-queue.js";
 import { bindAutoDate, createViewController } from "./view-date.js";
 import { pageModel } from "./page-model.js";
 import { renderDayNav, renderMain, renderSync } from "./render.js";
 import {
   addActivity,
   clearDay,
+  LEGACY_STORE_KEY,
   loadState,
   removeActivity,
   saveState,
@@ -15,7 +18,14 @@ import {
   setMark,
   setWeekNote,
 } from "./store.js";
-import { attemptSync, currentSyncStatus, readSyncConfig } from "./sync.js";
+import {
+  liveSyncStatus,
+  pushSupabase,
+  readSession,
+  requestEmailCode,
+  verifyEmailCode,
+  writeSession,
+} from "./sync.js";
 
 export function startApp(doc, options = {}) {
   const view = doc.defaultView;
@@ -31,6 +41,7 @@ export function startApp(doc, options = {}) {
 
   const controller = createViewController({ now });
   let summaryOpen = false;
+  let syncMessage = "";
   let revision = 0;
   let flushing = false;
   let flushAgain = false;
@@ -43,18 +54,19 @@ export function startApp(doc, options = {}) {
   const app = doc.getElementById("app");
   const saved = doc.getElementById("savedMsg");
 
-  function status() {
-    return currentSyncStatus(state, readSyncConfig(storage));
-  }
-
   function model() {
-    return pageModel({
+    const session = readSession(storage);
+    const current = pageModel({
       plan: PLAN,
       state,
       selectedDate: controller.selectedDate(),
       now: now(),
-      syncStatus: status(),
+      syncStatus: session ? liveSyncStatus(state, session) : "unsigned",
     });
+    current.showSignIn = !session;
+    current.syncEmail = SYNC_OWNER_EMAIL;
+    current.syncMessage = syncMessage;
+    return current;
   }
 
   function touchSaved() {
@@ -67,10 +79,12 @@ export function startApp(doc, options = {}) {
   }
 
   function commit(next) {
+    next = queueChanges(next, now().toISOString());
     revision += 1;
     state = next;
     saveState(storage, state);
     touchSaved();
+    void flushSync();
   }
 
   function draw() {
@@ -136,6 +150,8 @@ export function startApp(doc, options = {}) {
       return;
     }
     if (button.id === "copy-summary") copySummary(button);
+    if (button.id === "sync-send-code") void sendCode();
+    if (button.id === "sync-verify") void confirmCode();
   });
 
   doc.body.addEventListener("input", (event) => {
@@ -192,8 +208,58 @@ export function startApp(doc, options = {}) {
     },
   });
 
+  if (readSession(storage)) {
+    state = queueBootstrap(state, {
+      nowIso: now().toISOString(),
+      legacyRaw: storage.getItem(LEGACY_STORE_KEY),
+      plan: PLAN,
+    });
+    saveState(storage, state);
+  }
+
   draw();
   void flushSync();
+
+  async function sendCode() {
+    const email = doc.getElementById("sync-email")?.value.trim() || "";
+    syncMessage = "Sending a code…";
+    draw();
+    try {
+      const result = await requestEmailCode(email, fetchImpl);
+      syncMessage = result.ok
+        ? "Check your email for the code. It is used only to sign this phone in."
+        : "Could not send the code. Logs stay on this phone.";
+    } catch {
+      syncMessage = "Could not send the code. Logs stay on this phone.";
+    }
+    draw();
+  }
+
+  async function confirmCode() {
+    const email = doc.getElementById("sync-email")?.value.trim() || "";
+    const token = doc.getElementById("sync-code")?.value.trim() || "";
+    try {
+      const result = await verifyEmailCode(email, token, fetchImpl);
+      if (!result.ok) {
+        syncMessage = "That code was not accepted. Logs stay on this phone.";
+        draw();
+        return;
+      }
+      writeSession(storage, result.session);
+      syncMessage = "";
+      state = queueBootstrap(state, {
+        nowIso: now().toISOString(),
+        legacyRaw: storage.getItem(LEGACY_STORE_KEY),
+        plan: PLAN,
+      });
+      saveState(storage, state);
+      draw();
+      void flushSync();
+    } catch {
+      syncMessage = "That code was not accepted. Logs stay on this phone.";
+      draw();
+    }
+  }
 
   if (view.navigator?.serviceWorker) {
     view.navigator.serviceWorker.register("./sw.js").catch(() => {});
@@ -210,12 +276,12 @@ export function startApp(doc, options = {}) {
         flushAgain = false;
         const seen = revision;
         const snapshot = state;
-        const result = await attemptSync(snapshot, { storage, fetch: fetchImpl, now: now() });
+        const result = await pushSupabase(snapshot, { session: readSession(storage), fetch: fetchImpl });
         if (seen !== revision) {
           flushAgain = true;
           continue;
         }
-        if (result.status === "inactive") continue;
+        if (result.status === "unsigned") continue;
         state = result.state;
         saveState(storage, state);
         draw();

@@ -1,4 +1,4 @@
-const CACHE = "my-week-shell-v3";
+const CACHE = "my-week-shell-v4";
 const SHELL = [
   "./",
   "./index.html",
@@ -12,6 +12,8 @@ const SHELL = [
   "./render.js",
   "./store.js",
   "./sync.js",
+  "./sync-public.js",
+  "./sync-queue.js",
   "./manifest.webmanifest",
   "./icon-180.png",
   "./icon-192.png",

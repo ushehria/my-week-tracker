@@ -26,7 +26,15 @@ export function renderPage(model) {
 }
 
 export function renderSync(model) {
-  return `<p class="sync">${escapeHtml(model.syncLabel)}</p>`;
+  const status = `<p class="sync">${escapeHtml(model.syncLabel)}</p>`;
+  if (!model.showSignIn) return status;
+  return `${status}<form id="sync-sign-in" class="sync-form">
+    <label>Email<input id="sync-email" type="email" autocomplete="email" inputmode="email" value="${escapeHtml(model.syncEmail || "")}"></label>
+    <button type="button" class="btn secondary" id="sync-send-code">Email me a code</button>
+    <label>Code<input id="sync-code" inputmode="numeric" autocomplete="one-time-code"></label>
+    <button type="button" class="btn secondary" id="sync-verify">Confirm code</button>
+    <p class="hint" id="sync-message">${escapeHtml(model.syncMessage || "")}</p>
+  </form>`;
 }
 
 export function renderDayNav(model) {
