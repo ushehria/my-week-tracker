@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { PLAN } from "../plan.js";
 import { queueBootstrap, queueChanges } from "../sync-queue.js";
-import { liveSyncStatus, pushSupabase, requestEmailCode, syncStatusLabel, verifyMagicLink } from "../sync.js";
+import { liveSyncStatus, pushSupabase, requestEmailCode, sendFailure, syncStatusLabel, verifyMagicLink } from "../sync.js";
 import { SUPABASE_URL } from "../sync-public.js";
 import { blankState, setMark } from "../store.js";
 
@@ -142,4 +142,42 @@ test("a pasted signup confirmation link is verified as a token hash", async () =
   });
   assert.equal(requested.ok, true);
   assert.deepEqual(bodies.at(-1).body, { email: "ushehri.a@gmail.com", create_user: true });
+});
+
+test("email send errors keep the provider reason and do not retry", async () => {
+  let calls = 0;
+  const limited = await requestEmailCode("person@example.com", async () => {
+    calls += 1;
+    return {
+      ok: false,
+      status: 429,
+      headers: { get: (name) => (name === "retry-after" ? "120" : "") },
+      json: async () => ({ error_code: "over_email_send_rate_limit", msg: "email rate limit exceeded" }),
+    };
+  });
+  assert.equal(calls, 1);
+  assert.equal(limited.reason, "rate_limit");
+  assert.equal(limited.retryAfter, "120");
+  assert.match(sendFailure(limited), /120 seconds/);
+  assert.doesNotMatch(sendFailure(limited), /token/i);
+  const noWait = await requestEmailCode("person@example.com", async () => ({
+    ok: false,
+    status: 429,
+    headers: { get: () => "" },
+    json: async () => ({ error_code: "over_email_send_rate_limit", msg: "email rate limit exceeded" }),
+  }));
+  assert.equal(noWait.retryAfter, "");
+  assert.match(sendFailure(noWait), /did not say how long/);
+  const blocked = await requestEmailCode("other@example.com", async () => ({
+    ok: false,
+    status: 422,
+    headers: { get: () => "" },
+    json: async () => ({ error_code: "email_address_not_authorized", msg: "Email address not authorized" }),
+  }));
+  assert.equal(blocked.reason, "not_authorized");
+  assert.match(sendFailure(blocked), /default email/);
+  const offline = await requestEmailCode("person@example.com", async () => {
+    throw new Error("offline");
+  });
+  assert.equal(offline.reason, "network");
 });

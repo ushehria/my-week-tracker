@@ -23,6 +23,7 @@ import {
   pushSupabase,
   readSession,
   requestEmailCode,
+  sendFailure,
   signInFailure,
   verifyMagicLink,
   writeSession,
@@ -233,9 +234,9 @@ export function startApp(doc, options = {}) {
       const result = await requestEmailCode(email, fetchImpl);
       syncMessage = result.ok
         ? "Check your email. Copy the link and paste it below. Do not open it in Mail."
-        : "Could not send the link. Logs stay on this phone.";
+        : sendFailure(result);
     } catch {
-      syncMessage = "Could not send the link. Logs stay on this phone.";
+      syncMessage = sendFailure({ reason: "network" });
     }
     draw();
   }

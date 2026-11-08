@@ -133,23 +133,55 @@ export function liveSyncStatus(state, session) {
   return "ready";
 }
 
+export function sendFailure(result) {
+  if (result?.reason === "rate_limit") {
+    const wait = /^\d{1,5}$/.test(String(result.retryAfter || "")) ? ` The response asked for a wait of ${result.retryAfter} seconds.` : " The response did not say how long to wait.";
+    return `The email service refused another message for now because its send limit was reached.${wait} Do not request another link yet. You can still build a summary on this phone.`;
+  }
+  if (result?.reason === "not_authorized") {
+    return "This address is not allowed to receive the project's default email. You can still build a summary on this phone.";
+  }
+  if (result?.reason === "network") return "The request did not finish. Logs stay on this phone. You can still build a summary here.";
+  return "The email service did not accept the request. Logs stay on this phone. You can still build a summary here.";
+}
+
 export async function requestEmailCode(email, fetchImpl) {
-  const response = await fetchImpl(`${SUPABASE_URL}/auth/v1/otp`, {
-    method: "POST",
-    redirect: "error",
-    headers: {
-      apikey: SUPABASE_PUBLISHABLE_KEY,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ email, create_user: true }),
-  });
-  return { ok: response.ok };
+  let response;
+  try {
+    response = await fetchImpl(`${SUPABASE_URL}/auth/v1/otp`, {
+      method: "POST",
+      redirect: "error",
+      headers: {
+        apikey: SUPABASE_PUBLISHABLE_KEY,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ email, create_user: true }),
+    });
+  } catch {
+    return { ok: false, reason: "network" };
+  }
+  if (response.ok) return { ok: true, reason: "sent" };
+  let body = {};
+  try {
+    body = await response.json();
+  } catch {
+    body = {};
+  }
+  const code = `${body.error_code || ""} ${body.error || ""} ${body.msg || ""}`.toLowerCase();
+  const retryAfter = response.headers?.get?.("retry-after") || "";
+  if (response.status === 429 || code.includes("over_email_send_rate_limit") || code.includes("rate limit")) {
+    return { ok: false, reason: "rate_limit", retryAfter: /^\d{1,5}$/.test(String(retryAfter).trim()) ? String(retryAfter).trim() : "" };
+  }
+  if (code.includes("email_address_not_authorized") || code.includes("not authorized")) {
+    return { ok: false, reason: "not_authorized" };
+  }
+  return { ok: false, reason: "rejected" };
 }
 
 const LINK_TYPES = new Set(["email", "magiclink", "signup"]);
 
 export function signInFailure(reason) {
-  if (reason === "expired") return "That sign-in link has expired. Email a new one and paste it here. Logs stay on this phone.";
+  if (reason === "expired") return "That sign-in link was not accepted. The provider reported it as expired or already used. A mail preview can open the link before you paste it. Logs stay on this phone.";
   if (reason === "network") return "The sign-in request did not finish. Logs stay on this phone.";
   if (reason === "invalid") return "That is not a sign-in link. Paste the full confirmation link. Logs stay on this phone.";
   return "That sign-in link was not accepted. Logs stay on this phone.";
