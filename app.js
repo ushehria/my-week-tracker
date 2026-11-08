@@ -23,7 +23,7 @@ import {
   pushSupabase,
   readSession,
   requestEmailCode,
-  verifyEmailCode,
+  verifyMagicLink,
   writeSession,
 } from "./sync.js";
 
@@ -150,8 +150,8 @@ export function startApp(doc, options = {}) {
       return;
     }
     if (button.id === "copy-summary") copySummary(button);
-    if (button.id === "sync-send-code") void sendCode();
-    if (button.id === "sync-verify") void confirmCode();
+    if (button.id === "sync-send-link") void sendLink();
+    if (button.id === "sync-use-link") void useLink();
   });
 
   doc.body.addEventListener("input", (event) => {
@@ -220,28 +220,29 @@ export function startApp(doc, options = {}) {
   draw();
   void flushSync();
 
-  async function sendCode() {
+  async function sendLink() {
     const email = doc.getElementById("sync-email")?.value.trim() || "";
-    syncMessage = "Sending a code…";
+    syncMessage = "Sending a sign-in link…";
     draw();
     try {
       const result = await requestEmailCode(email, fetchImpl);
       syncMessage = result.ok
-        ? "Check your email for the code. It is used only to sign this phone in."
-        : "Could not send the code. Logs stay on this phone.";
+        ? "Check your email. Copy the link and paste it below. Do not open it in Mail."
+        : "Could not send the link. Logs stay on this phone.";
     } catch {
-      syncMessage = "Could not send the code. Logs stay on this phone.";
+      syncMessage = "Could not send the link. Logs stay on this phone.";
     }
     draw();
   }
 
-  async function confirmCode() {
-    const email = doc.getElementById("sync-email")?.value.trim() || "";
-    const token = doc.getElementById("sync-code")?.value.trim() || "";
+  async function useLink() {
+    const field = doc.getElementById("sync-link");
+    const link = field?.value || "";
+    if (field) field.value = "";
     try {
-      const result = await verifyEmailCode(email, token, fetchImpl);
+      const result = await verifyMagicLink(link, fetchImpl);
       if (!result.ok) {
-        syncMessage = "That code was not accepted. Logs stay on this phone.";
+        syncMessage = "That sign-in link was not accepted. Logs stay on this phone.";
         draw();
         return;
       }
@@ -256,7 +257,7 @@ export function startApp(doc, options = {}) {
       draw();
       void flushSync();
     } catch {
-      syncMessage = "That code was not accepted. Logs stay on this phone.";
+      syncMessage = "That sign-in link was not accepted. Logs stay on this phone.";
       draw();
     }
   }

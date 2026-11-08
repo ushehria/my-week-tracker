@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { PLAN } from "../plan.js";
 import { queueBootstrap, queueChanges } from "../sync-queue.js";
-import { liveSyncStatus, pushSupabase, requestEmailCode, syncStatusLabel, verifyEmailCode } from "../sync.js";
+import { liveSyncStatus, pushSupabase, requestEmailCode, syncStatusLabel, verifyMagicLink } from "../sync.js";
 import { SUPABASE_URL } from "../sync-public.js";
 import { blankState, setMark } from "../store.js";
 
@@ -115,22 +115,28 @@ test("a failed push keeps the queue and the local log", async () => {
   assert.equal(JSON.stringify(result.state).includes("user-access-token"), false);
 });
 
-test("email code login uses sign-in OTP and verify type email", async () => {
+test("sign-in sends a magic link and verifies the pasted token hash locally", async () => {
   const bodies = [];
   const fetchImpl = async (url, options) => {
-    bodies.push({ url, body: JSON.parse(options.body) });
+    bodies.push({ url, body: JSON.parse(options.body), redirect: options.redirect });
     if (url.endsWith("/verify")) {
       return { ok: true, json: async () => ({ access_token: "user-access-token", user: { id: "user-1" } }) };
     }
     return { ok: true, json: async () => ({}) };
   };
   const requested = await requestEmailCode("ushehri.a@gmail.com", fetchImpl);
-  const verified = await verifyEmailCode("ushehri.a@gmail.com", "123456", fetchImpl);
+  const pasted = "https://psjlltcrepnimnvbggog.supabase.co/auth/v1/verify?token=example-token-hash&type=magiclink&redirect_to=http://localhost:3000";
+  const verified = await verifyMagicLink(pasted, fetchImpl);
   assert.equal(requested.ok, true);
   assert.equal(verified.ok, true);
   assert.equal(verified.session.user.id, "user-1");
   assert.equal(bodies[0].url, `${SUPABASE_URL}/auth/v1/otp`);
   assert.deepEqual(bodies[0].body, { email: "ushehri.a@gmail.com", create_user: true });
+  assert.equal(bodies[0].body.emailRedirectTo, undefined);
   assert.equal(bodies[1].url, `${SUPABASE_URL}/auth/v1/verify`);
-  assert.deepEqual(bodies[1].body, { email: "ushehri.a@gmail.com", token: "123456", type: "email" });
+  assert.deepEqual(bodies[1].body, { token_hash: "example-token-hash", type: "magiclink" });
+  assert.equal(bodies[1].redirect, "error");
+  const rejected = await verifyMagicLink("https://example.com/auth/v1/verify?token=example-token-hash&type=magiclink", fetchImpl);
+  assert.equal(rejected.ok, false);
+  assert.equal(bodies.length, 2);
 });

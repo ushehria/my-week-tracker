@@ -30,9 +30,10 @@ export function renderSync(model) {
   if (!model.showSignIn) return status;
   return `${status}<form id="sync-sign-in" class="sync-form">
     <label>Email<input id="sync-email" type="email" autocomplete="email" inputmode="email" value="${escapeHtml(model.syncEmail || "")}"></label>
-    <button type="button" class="btn secondary" id="sync-send-code">Email me a code</button>
-    <label>Code<input id="sync-code" inputmode="numeric" autocomplete="one-time-code"></label>
-    <button type="button" class="btn secondary" id="sync-verify">Confirm code</button>
+    <button type="button" class="btn secondary" id="sync-send-link">Email me a sign-in link</button>
+    <label>Sign-in link<input id="sync-link" type="text" autocomplete="off" spellcheck="false" placeholder="Paste the link from the email"></label>
+    <button type="button" class="btn secondary" id="sync-use-link">Use this link</button>
+    <p class="hint">Paste the link here in the home-screen app. Opening it in Mail starts a separate browser and leaves this log behind.</p>
     <p class="hint" id="sync-message">${escapeHtml(model.syncMessage || "")}</p>
   </form>`;
 }

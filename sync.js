@@ -146,7 +146,22 @@ export async function requestEmailCode(email, fetchImpl) {
   return { ok: response.ok };
 }
 
-export async function verifyEmailCode(email, token, fetchImpl) {
+const LINK_TYPES = new Set(["email", "magiclink", "signup"]);
+
+export async function verifyMagicLink(link, fetchImpl) {
+  let url;
+  try {
+    url = new URL(String(link || "").trim());
+  } catch {
+    return { ok: false, session: null };
+  }
+  if (url.protocol !== "https:" || url.hostname !== "psjlltcrepnimnvbggog.supabase.co") {
+    return { ok: false, session: null };
+  }
+  if (!url.pathname.endsWith("/auth/v1/verify")) return { ok: false, session: null };
+  const tokenHash = url.searchParams.get("token");
+  const type = url.searchParams.get("type");
+  if (!tokenHash || !LINK_TYPES.has(type)) return { ok: false, session: null };
   const response = await fetchImpl(`${SUPABASE_URL}/auth/v1/verify`, {
     method: "POST",
     redirect: "error",
@@ -154,7 +169,7 @@ export async function verifyEmailCode(email, token, fetchImpl) {
       apikey: SUPABASE_PUBLISHABLE_KEY,
       "content-type": "application/json",
     },
-    body: JSON.stringify({ email, token, type: "email" }),
+    body: JSON.stringify({ token_hash: tokenHash, type }),
   });
   if (!response.ok) return { ok: false, session: null };
   const session = await response.json();
