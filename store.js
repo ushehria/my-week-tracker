@@ -1,3 +1,4 @@
+import { presentActivity, validateActivity } from "./activity-rules.js";
 import { isDueForCollection, weekStartMonday } from "./london-time.js";
 
 export const LEGACY_STORE_KEY = "abdullah-my-week-4-8-nov-v1";
@@ -51,6 +52,29 @@ export function setDayValue(state, iso, field, value) {
   const day = ensureDay(week, iso);
   day[field] = value;
   refreshPending(next, week.weekStart);
+  return next;
+}
+
+export function readCall(day, parent) {
+  const value = day?.calls?.[parent];
+  return { done: Boolean(value?.done), note: value?.note || "" };
+}
+
+export function shouldAskCall(previousDone, nextDone) {
+  return !previousDone && Boolean(nextDone);
+}
+
+export function setCall(state, iso, parent, { done, note } = {}) {
+  if (parent !== "mother" && parent !== "father") return state;
+  const next = clone(state);
+  const day = ensureDay(ensureWeek(next, weekStartMonday(iso)), iso);
+  const previous = day.calls?.[parent] || { done: false, note: "" };
+  if (!day.calls) day.calls = {};
+  day.calls[parent] = {
+    done: Boolean(done),
+    note: note === undefined ? String(previous.note || "") : String(note),
+  };
+  refreshPending(next, weekStartMonday(iso));
   return next;
 }
 
@@ -120,6 +144,30 @@ export function updateActivity(state, iso, activityId, patch) {
   return next;
 }
 
+export function saveFlexibleActivity(state, iso, activity) {
+  const existing = state.weeks?.[weekStartMonday(iso)]?.days?.[iso]?.activities || [];
+  const others = existing.filter((item) => item.id !== activity.id).map(presentActivity);
+  const result = validateActivity(activity, others);
+  if (!result.ok) return { ok: false, error: result.error, state };
+  const next = clone(state);
+  const day = ensureDay(ensureWeek(next, weekStartMonday(iso)), iso);
+  const previous = day.activities.find((item) => item.id === activity.id) || {};
+  const saved = {
+    ...previous,
+    id: activity.id,
+    title: result.activity.title,
+    place: result.activity.title,
+    start: result.activity.start,
+    end: result.activity.end,
+    duration: result.activity.duration,
+  };
+  const index = day.activities.findIndex((item) => item.id === activity.id);
+  if (index === -1) day.activities.push(saved);
+  else day.activities[index] = saved;
+  refreshPending(next, weekStartMonday(iso));
+  return { ok: true, state: next, activity: saved };
+}
+
 export function removeActivity(state, iso, activityId) {
   const next = clone(state);
   const week = next.weeks[weekStartMonday(iso)];
@@ -137,7 +185,8 @@ export function weekHasContent(week) {
     if (day.cigs) return true;
     if (day.energy) return true;
     if (day.marks && Object.keys(day.marks).length) return true;
-    return (day.activities || []).some((item) => item.start || item.end || item.place || item.duration);
+    if ((day.activities || []).some((item) => item.start || item.end || item.place || item.title || item.duration)) return true;
+    return ["mother", "father"].some((parent) => day.calls?.[parent]?.done || String(day.calls?.[parent]?.note || "").trim());
   });
 }
 

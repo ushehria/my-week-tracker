@@ -4,16 +4,17 @@ import { bindAutoDate, createViewController } from "./view-date.js";
 import { pageModel } from "./page-model.js";
 import { renderDayNav, renderMain, renderSync } from "./render.js";
 import {
-  addActivity,
   clearDay,
   loadState,
   removeActivity,
+  saveFlexibleActivity,
   saveState,
   sealDueWeeks,
+  setCall,
   setDayValue,
-  recordWindowEdit,
   setMark,
   setWeekNote,
+  shouldAskCall,
 } from "./store.js";
 import { attemptSync, currentSyncStatus, readSyncConfig } from "./sync.js";
 
@@ -31,6 +32,8 @@ export function startApp(doc, options = {}) {
 
   const controller = createViewController({ now });
   let summaryOpen = false;
+  let activityError = "";
+  let promptParent = null;
   let revision = 0;
   let flushing = false;
   let flushAgain = false;
@@ -76,6 +79,8 @@ export function startApp(doc, options = {}) {
   function draw() {
     const y = view.scrollY || 0;
     const current = model();
+    current.activityError = activityError;
+    current.promptParent = promptParent;
     doc.title = `${current.title} · ${current.range}`;
     title.textContent = `${current.title} · ${current.range}`;
     sub.textContent = current.viewingHint ? `${current.range} · ${current.viewingHint}` : "Tap · → ✓ → ✗. Saves on this phone.";
@@ -108,16 +113,38 @@ export function startApp(doc, options = {}) {
       return;
     }
     if (button.dataset.habit) {
-      const item = current.view.bands.flatMap((band) => band.items).find((entry) => entry.id === button.dataset.habit);
+      const item = findHabit(current.view, button.dataset.habit);
       commit(setMark(state, current.selectedDate, button.dataset.habit, cycleMark(item?.mark || "")));
       draw();
       return;
     }
     if (button.id === "add-activity") {
-      const id = view.crypto?.randomUUID?.() || `window-${Date.now()}`;
-      commit(addActivity(state, current.selectedDate, { id }));
+      const result = saveFlexibleActivity(state, current.selectedDate, {
+        id: view.crypto?.randomUUID?.() || `activity-${Date.now()}`,
+        title: doc.getElementById("activity-title")?.value || "",
+        start: doc.getElementById("activity-start")?.value || "",
+        end: doc.getElementById("activity-end")?.value || "",
+      });
+      if (!result.ok) {
+        activityError = result.error;
+        draw();
+        return;
+      }
+      activityError = "";
+      commit(result.state);
       draw();
-      doc.querySelector(`[data-activity="${id}"]`)?.scrollIntoView({ block: "center" });
+      return;
+    }
+    if (button.id === "call-save" && promptParent) {
+      const note = doc.getElementById("call-response")?.value || "";
+      commit(setCall(state, current.selectedDate, promptParent, { done: true, note }));
+      promptParent = null;
+      draw();
+      return;
+    }
+    if (button.id === "call-skip") {
+      promptParent = null;
+      draw();
       return;
     }
     if (button.dataset.removeActivity) {
@@ -149,20 +176,37 @@ export function startApp(doc, options = {}) {
       commit(setWeekNote(state, current.selectedDate, target.value));
       return;
     }
-    const field = target.getAttribute?.("data-field");
     const card = target.closest?.("[data-activity]");
-    if (field && card) {
+    if (card && card.id !== "new-activity") {
       const activityId = card.getAttribute("data-activity");
-      const shown = current.view.bands.flatMap((band) => band.items).find((item) => item.id === activityId)
-        || current.view.activities?.items.find((item) => item.id === activityId);
-      commit(recordWindowEdit(state, current.selectedDate, {
+      const result = saveFlexibleActivity(state, current.selectedDate, {
         id: activityId,
-        start: shown?.start || "",
-        end: shown?.end || "",
-        place: shown?.place || "",
-        duration: shown?.duration || "",
-      }, field, target.value));
+        title: card.querySelector('[data-field="title"]')?.value || "",
+        start: card.querySelector('[data-field="start"]')?.value || "",
+        end: card.querySelector('[data-field="end"]')?.value || "",
+      });
+      if (!result.ok) {
+        activityError = result.error;
+        draw();
+        return;
+      }
+      activityError = "";
+      commit(result.state);
+      draw();
     }
+  });
+
+  doc.body.addEventListener("change", (event) => {
+    const target = event.target;
+    if (target.id !== "call-mother" && target.id !== "call-father") return;
+    const parent = target.id === "call-mother" ? "mother" : "father";
+    const current = model();
+    const previous = current.calls[parent];
+    const done = Boolean(target.checked);
+    commit(setCall(state, current.selectedDate, parent, { done }));
+    if (shouldAskCall(previous.done, done)) promptParent = parent;
+    else if (promptParent === parent) promptParent = null;
+    draw();
   });
 
   function copySummary(button) {
@@ -226,6 +270,16 @@ export function startApp(doc, options = {}) {
   }
 }
 
+function findHabit(view, id) {
+  const pools = [
+    ...(view.bands || []).flatMap((band) => band.items),
+    ...(view.prayers || []),
+    ...(view.checkins || []),
+    ...(view.preserved || []),
+  ];
+  return pools.find((item) => item.id === id);
+}
+
 function cycleMark(current) {
   if (current === "yes") return "no";
   if (current === "no") return "";
@@ -235,7 +289,11 @@ function cycleMark(current) {
 function summaryText(current) {
   const lines = [current.heading];
   if (current.view.banner) lines.push(current.view.banner);
-  for (const band of current.view.bands) {
+  for (const item of [...(current.view.prayers || []), ...(current.view.checkins || []), ...(current.view.preserved || [])]) {
+    const mark = item.mark === "yes" ? "✓" : item.mark === "no" ? "✗" : "—";
+    lines.push(`${item.label}${item.time ? ` (${item.time})` : ""}: ${mark}`);
+  }
+  for (const band of current.view.bands || []) {
     for (const item of band.items) {
       if (item.kind === "window") {
         const range = [item.start, item.end].filter(Boolean).join("–");
@@ -249,13 +307,14 @@ function summaryText(current) {
     }
   }
   if (current.view.activities) {
-    if (!current.view.activities.items.length) lines.push("Windows: —");
     for (const item of current.view.activities.items) {
       const range = [item.start, item.end].filter(Boolean).join("–");
-      const parts = [range, item.place, item.duration].filter(Boolean);
-      lines.push(parts.join(" · ") || "Window");
+      const parts = [item.title, range, item.duration].filter(Boolean);
+      if (parts.length) lines.push(parts.join(" · "));
     }
   }
+  if (current.calls?.mother?.done) lines.push(`Call mother: ✓${current.calls.mother.note ? ` (${current.calls.mother.note})` : ""}`);
+  if (current.calls?.father?.done) lines.push(`Call father: ✓${current.calls.father.note ? ` (${current.calls.father.note})` : ""}`);
   lines.push(`Cigarettes: ${current.cigs || "—"}`);
   lines.push(`Energy 1–10: ${current.energy || "—"}`);
   if (current.note.trim()) lines.push(`Note: ${current.note.trim()}`);

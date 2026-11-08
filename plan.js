@@ -10,27 +10,10 @@ export const PLAN = {
       bands: ["Morning", "Morning work", "Midday", "Afternoon", "Evening", "Night", "Daily totals"],
     },
     open: {
-      bands: ["Morning", "Midday", "Afternoon", "Evening", "Night", "Daily totals"],
+      flexible: true,
       banner: "No PhD",
-      activities: true,
-      windows: [
-        {
-          id: "morning",
-          after: "breakfast",
-          label: "Morning window",
-          hint: "8:30–Dhuhr",
-          start: "08:30",
-          end: "12:00",
-        },
-        {
-          id: "afternoon",
-          after: "asr",
-          label: "Afternoon window",
-          hint: "2:30–Maghrib",
-          start: "14:30",
-          end: "16:25",
-        },
-      ],
+      prayers: ["fajr", "dhuhr", "asr", "maghrib", "isha"],
+      checkins: ["meds_am", "meds_pm"],
     },
   },
   days: {

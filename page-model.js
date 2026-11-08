@@ -1,4 +1,5 @@
 import { dayView } from "./day-view.js";
+import { readCall } from "./store.js";
 import {
   formatDayLabel,
   formatLongDay,
@@ -36,6 +37,10 @@ export function pageModel({ plan, state, selectedDate, now, syncStatus }) {
     cigs: dayRecord.cigs || "",
     energy: dayRecord.energy || "",
     note: week?.note || "",
+    calls: {
+      mother: readCall(dayRecord, "mother"),
+      father: readCall(dayRecord, "father"),
+    },
     syncLabel: syncStatusLabel(syncStatus),
     showsOtherWeeks: false,
   };
