@@ -14,6 +14,7 @@ const SHELL = [
   "./sync.js",
   "./sync-public.js",
   "./sync-queue.js",
+  "./week-summary.js",
   "./manifest.webmanifest",
   "./icon-180.png",
   "./icon-192.png",

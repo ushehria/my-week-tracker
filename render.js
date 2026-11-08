@@ -101,9 +101,8 @@ function renderLog(model) {
     <label>Note for the week<textarea id="note" rows="3" placeholder="Optional">${escapeHtml(model.note)}</textarea></label>
   </div>
   <div class="actions">
-    <button type="button" class="btn" id="build-summary">Build summary</button>
-    <button type="button" class="btn secondary" id="copy-summary" hidden>Copy summary</button>
-    <pre id="summaryBox" hidden></pre>
+    <button type="button" class="btn" id="copy-week">Copy week summary</button>
+    <pre id="summaryBox" hidden tabindex="0"></pre>
     <button type="button" class="btn secondary" id="clear-day">Clear this day's marks</button>
   </div></section>`;
 }

@@ -2,6 +2,7 @@ import { PLAN } from "./plan.js?v=6";
 import { LEGACY_PLAN } from "./legacy-plan.js?v=6";
 import { SYNC_OWNER_EMAIL } from "./sync-public.js?v=6";
 import { queueBootstrap, queueChanges } from "./sync-queue.js?v=6";
+import { weekSummary } from "./week-summary.js?v=7";
 import { bindAutoDate, createViewController } from "./view-date.js?v=6";
 import { pageModel } from "./page-model.js?v=6";
 import { renderDayNav, renderMain, renderSync } from "./render.js?v=6";
@@ -99,17 +100,47 @@ export function startApp(doc, options = {}) {
     dayTop.innerHTML = renderDayNav(current);
     dayBottom.innerHTML = renderDayNav(current);
     app.innerHTML = renderMain(current);
-    if (summaryOpen) showSummary(current);
     view.scrollTo(0, y);
   }
 
-  function showSummary(current) {
+  async function copyWeek(button) {
+    const text = weekSummary({ state, plan: PLAN, weekStart: model().weekStart });
     const box = doc.getElementById("summaryBox");
-    const copy = doc.getElementById("copy-summary");
-    if (!box || !copy) return;
-    box.hidden = false;
-    copy.hidden = false;
-    box.textContent = summaryText(current);
+    if (box) {
+      box.hidden = false;
+      box.textContent = text;
+      selectText(box);
+    }
+    button.textContent = "Copying…";
+    let copied = false;
+    try {
+      if (view.navigator?.clipboard?.writeText) {
+        await view.navigator.clipboard.writeText(text);
+        copied = true;
+      }
+    } catch {
+      copied = false;
+    }
+    if (!copied) {
+      try {
+        copied = Boolean(doc.execCommand?.("copy"));
+      } catch {
+        copied = false;
+      }
+    }
+    button.textContent = copied ? "Copied" : "Select the summary";
+    view.setTimeout(() => {
+      if (doc.getElementById("copy-week")) button.textContent = "Copy week summary";
+    }, 2000);
+  }
+
+  function selectText(node) {
+    const selection = view.getSelection?.();
+    if (!selection || !doc.createRange) return;
+    const range = doc.createRange();
+    range.selectNodeContents(node);
+    selection.removeAllRanges();
+    selection.addRange(range);
   }
 
   doc.body.addEventListener("submit", (event) => {
@@ -150,12 +181,10 @@ export function startApp(doc, options = {}) {
       draw();
       return;
     }
-    if (button.id === "build-summary") {
-      summaryOpen = true;
-      showSummary(current);
+    if (button.id === "copy-week") {
+      void copyWeek(button);
       return;
     }
-    if (button.id === "copy-summary") copySummary(button);
     if (button.id === "sync-send-link") void sendLink();
     if (button.id === "sync-use-link") void useLink();
   });
