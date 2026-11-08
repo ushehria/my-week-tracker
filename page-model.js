@@ -1,4 +1,4 @@
-import { dayView } from "./day-view.js";
+import { dayView } from "./day-view.js?v=6";
 import {
   formatDayLabel,
   formatLongDay,
@@ -6,8 +6,8 @@ import {
   londonDate,
   weekDates,
   weekStartMonday,
-} from "./london-time.js";
-import { syncStatusLabel } from "./sync.js";
+} from "./london-time.js?v=6";
+import { syncStatusLabel } from "./sync.js?v=6";
 
 export function pageModel({ plan, state, selectedDate, now, syncStatus }) {
   const today = londonDate(now);

@@ -1,10 +1,10 @@
-import { PLAN } from "./plan.js";
-import { LEGACY_PLAN } from "./legacy-plan.js";
-import { SYNC_OWNER_EMAIL } from "./sync-public.js";
-import { queueBootstrap, queueChanges } from "./sync-queue.js";
-import { bindAutoDate, createViewController } from "./view-date.js";
-import { pageModel } from "./page-model.js";
-import { renderDayNav, renderMain, renderSync } from "./render.js";
+import { PLAN } from "./plan.js?v=6";
+import { LEGACY_PLAN } from "./legacy-plan.js?v=6";
+import { SYNC_OWNER_EMAIL } from "./sync-public.js?v=6";
+import { queueBootstrap, queueChanges } from "./sync-queue.js?v=6";
+import { bindAutoDate, createViewController } from "./view-date.js?v=6";
+import { pageModel } from "./page-model.js?v=6";
+import { renderDayNav, renderMain, renderSync } from "./render.js?v=6";
 import {
   addActivity,
   clearDay,
@@ -17,15 +17,16 @@ import {
   recordWindowEdit,
   setMark,
   setWeekNote,
-} from "./store.js";
+} from "./store.js?v=6";
 import {
   liveSyncStatus,
   pushSupabase,
   readSession,
   requestEmailCode,
+  signInFailure,
   verifyMagicLink,
   writeSession,
-} from "./sync.js";
+} from "./sync.js?v=6";
 
 export function startApp(doc, options = {}) {
   const view = doc.defaultView;
@@ -109,6 +110,10 @@ export function startApp(doc, options = {}) {
     copy.hidden = false;
     box.textContent = summaryText(current);
   }
+
+  doc.body.addEventListener("submit", (event) => {
+    if (event.target?.id === "sync-sign-in") event.preventDefault();
+  });
 
   doc.body.addEventListener("click", (event) => {
     const button = event.target.closest("button");
@@ -237,29 +242,37 @@ export function startApp(doc, options = {}) {
 
   async function useLink() {
     const field = doc.getElementById("sync-link");
+    const button = doc.getElementById("sync-use-link");
     const link = field?.value || "";
     if (field) field.value = "";
-    try {
-      const result = await verifyMagicLink(link, fetchImpl);
-      if (!result.ok) {
-        syncMessage = "That sign-in link was not accepted. Logs stay on this phone.";
-        draw();
-        return;
-      }
-      writeSession(storage, result.session);
-      syncMessage = "";
-      state = queueBootstrap(state, {
-        nowIso: now().toISOString(),
-        legacyRaw: storage.getItem(LEGACY_STORE_KEY),
-        plan: PLAN,
-      });
-      saveState(storage, state);
-      draw();
-      void flushSync();
-    } catch {
-      syncMessage = "That sign-in link was not accepted. Logs stay on this phone.";
-      draw();
+    syncMessage = "Checking the link…";
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Checking…";
     }
+    const statusLine = doc.querySelector("#sync .sync");
+    if (statusLine) statusLine.textContent = syncMessage;
+    let result;
+    try {
+      result = await verifyMagicLink(link, fetchImpl);
+    } catch {
+      result = { ok: false, reason: "network" };
+    }
+    if (!result.ok) {
+      syncMessage = signInFailure(result.reason);
+      draw();
+      return;
+    }
+    writeSession(storage, result.session);
+    syncMessage = "Signed in. Logs stay on this phone.";
+    state = queueBootstrap(state, {
+      nowIso: now().toISOString(),
+      legacyRaw: storage.getItem(LEGACY_STORE_KEY),
+      plan: PLAN,
+    });
+    saveState(storage, state);
+    draw();
+    void flushSync();
   }
 
   if (view.navigator?.serviceWorker) {

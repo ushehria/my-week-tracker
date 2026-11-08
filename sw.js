@@ -1,4 +1,4 @@
-const CACHE = "my-week-shell-v5";
+const CACHE = "my-week-shell-v6";
 const SHELL = [
   "./",
   "./index.html",
@@ -39,8 +39,9 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  const networkRequest = url.pathname.endsWith(".js") ? new Request(request, { cache: "no-store" }) : request;
   event.respondWith(
-    fetch(request)
+    fetch(networkRequest)
       .then((response) => {
         if (response && response.ok) {
           const copy = response.clone();

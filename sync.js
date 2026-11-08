@@ -2,7 +2,7 @@
 // A duplicate client_rev_id (HTTP 409 or Postgres 23505) means that change is already stored.
 // Week logs stay on the phone either way. Nothing here is a service-role secret.
 
-import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./sync-public.js";
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./sync-public.js?v=6";
 
 export const SYNC_CONFIG_KEY = "abdullah-my-week-sync-config";
 export const SESSION_KEY = "abdullah-my-week-sync-session";
@@ -148,33 +148,57 @@ export async function requestEmailCode(email, fetchImpl) {
 
 const LINK_TYPES = new Set(["email", "magiclink", "signup"]);
 
+export function signInFailure(reason) {
+  if (reason === "expired") return "That sign-in link has expired. Email a new one and paste it here. Logs stay on this phone.";
+  if (reason === "network") return "The sign-in request did not finish. Logs stay on this phone.";
+  if (reason === "invalid") return "That is not a sign-in link. Paste the full confirmation link. Logs stay on this phone.";
+  return "That sign-in link was not accepted. Logs stay on this phone.";
+}
+
 export async function verifyMagicLink(link, fetchImpl) {
   let url;
   try {
     url = new URL(String(link || "").trim());
   } catch {
-    return { ok: false, session: null };
+    return { ok: false, reason: "invalid", session: null };
   }
   if (url.protocol !== "https:" || url.hostname !== "psjlltcrepnimnvbggog.supabase.co") {
-    return { ok: false, session: null };
+    return { ok: false, reason: "invalid", session: null };
   }
-  if (!url.pathname.endsWith("/auth/v1/verify")) return { ok: false, session: null };
+  if (!url.pathname.endsWith("/auth/v1/verify")) return { ok: false, reason: "invalid", session: null };
   const tokenHash = url.searchParams.get("token");
   const type = url.searchParams.get("type");
-  if (!tokenHash || !LINK_TYPES.has(type)) return { ok: false, session: null };
-  const response = await fetchImpl(`${SUPABASE_URL}/auth/v1/verify`, {
-    method: "POST",
-    redirect: "error",
-    headers: {
-      apikey: SUPABASE_PUBLISHABLE_KEY,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ token_hash: tokenHash, type }),
-  });
-  if (!response.ok) return { ok: false, session: null };
+  if (!tokenHash || !LINK_TYPES.has(type)) return { ok: false, reason: "invalid", session: null };
+  let response;
+  try {
+    response = await fetchImpl(`${SUPABASE_URL}/auth/v1/verify`, {
+      method: "POST",
+      redirect: "error",
+      headers: {
+        apikey: SUPABASE_PUBLISHABLE_KEY,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ token_hash: tokenHash, type }),
+    });
+  } catch {
+    return { ok: false, reason: "network", session: null };
+  }
+  if (!response.ok) {
+    let body = {};
+    try {
+      body = await response.json();
+    } catch {
+      body = {};
+    }
+    const code = `${body.error_code || ""} ${body.error || ""} ${body.msg || ""}`.toLowerCase();
+    if (response.status === 403 || code.includes("expired") || code.includes("otp_expired")) {
+      return { ok: false, reason: "expired", session: null };
+    }
+    return { ok: false, reason: "rejected", session: null };
+  }
   const session = await response.json();
-  if (!session?.access_token || !session?.user?.id) return { ok: false, session: null };
-  return { ok: true, session };
+  if (!session?.access_token || !session?.user?.id) return { ok: false, reason: "rejected", session: null };
+  return { ok: true, reason: "accepted", session };
 }
 
 export async function pushSupabase(state, { session, fetch: fetchImpl }) {

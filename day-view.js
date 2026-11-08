@@ -1,4 +1,4 @@
-import { weekdayKey } from "./london-time.js";
+import { weekdayKey } from "./london-time.js?v=6";
 
 const ACTIVITY_FIELDS = ["start", "end", "place", "duration"];
 

@@ -26,7 +26,7 @@ export function renderPage(model) {
 }
 
 export function renderSync(model) {
-  const status = `<p class="sync">${escapeHtml(model.syncLabel)}</p>`;
+  const status = `<p class="sync">${escapeHtml(model.syncMessage || model.syncLabel)}</p>`;
   if (!model.showSignIn) return status;
   return `${status}<form id="sync-sign-in" class="sync-form">
     <label>Email<input id="sync-email" type="email" autocomplete="email" inputmode="email" value="${escapeHtml(model.syncEmail || "")}"></label>

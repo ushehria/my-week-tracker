@@ -1,4 +1,4 @@
-import { londonDate, nextLondonMidnight } from "./london-time.js";
+import { londonDate, nextLondonMidnight } from "./london-time.js?v=6";
 
 export function createViewController({ now }) {
   const clock = typeof now === "function" ? now : () => now;

@@ -1,4 +1,4 @@
-import { isDueForCollection, weekStartMonday } from "./london-time.js";
+import { isDueForCollection, weekStartMonday } from "./london-time.js?v=6";
 
 export const LEGACY_STORE_KEY = "abdullah-my-week-4-8-nov-v1";
 export const STORE_KEY = "abdullah-my-week-v2";
