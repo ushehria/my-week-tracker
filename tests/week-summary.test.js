@@ -56,7 +56,7 @@ test("the first copy includes only Wed 4–Sun 8 and keeps yes, no, and unlogged
   assert.doesNotMatch(text, /3 Nov/);
   assert.match(text, /Fajr: yes/);
   assert.match(text, /Work block 1: no/);
-  assert.match(text, /Nap: yes/);
+  assert.match(text, /Nap 60–75 min \(set alarm\): yes/);
   assert.match(text, /صلاة الجمعة: yes/);
   assert.match(text, /Family time: yes/);
   assert.match(text, /In bed: no/);

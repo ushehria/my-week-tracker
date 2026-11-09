@@ -54,7 +54,7 @@ export const PLAN = {
       },
     },
     { id: "lunch", label: "Lunch", band: "Midday" },
-    { id: "nap", label: "Nap", time: "20–30 min · 1–2 PM", band: "Midday" },
+    { id: "nap", label: "Nap 60–75 min (set alarm)", time: "1–2 PM", band: "Midday" },
     { id: "coffee", label: "Last coffee", time: "before 2:30 PM", band: "Midday" },
     { id: "asr", label: "Asr", time: "~2:15", band: "Afternoon" },
     {

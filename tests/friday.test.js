@@ -45,8 +45,8 @@ test("usual rhythm times are plan data", () => {
   const items = view.bands.flatMap((band) => band.items);
   const byId = Object.fromEntries(items.map((item) => [item.id, item]));
   assert.equal(byId.woke.time, "6:30–7");
-  assert.match(byId.nap.time, /20–30 min/);
-  assert.match(byId.nap.time, /1–2 PM/);
+  assert.equal(byId.nap.label, "Nap 60–75 min (set alarm)");
+  assert.equal(byId.nap.time, "1–2 PM");
   assert.match(byId.family.time, /7–9/);
   assert.equal(byId.bed.time, "9:30–10");
 });

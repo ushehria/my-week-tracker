@@ -1,4 +1,4 @@
-import { PLAN } from "./plan.js?v=9";
+import { PLAN } from "./plan.js?v=11";
 import { LEGACY_PLAN } from "./legacy-plan.js?v=9";
 import { SYNC_OWNER_EMAIL } from "./sync-public.js?v=9";
 import { queueBootstrap, queueChanges } from "./sync-queue.js?v=9";
