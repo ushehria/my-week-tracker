@@ -10,27 +10,10 @@ export const PLAN = {
       bands: ["Morning", "Morning work", "Midday", "Afternoon", "Evening", "Night", "Daily totals"],
     },
     open: {
-      bands: ["Morning", "Midday", "Afternoon", "Evening", "Night", "Daily totals"],
+      flexible: true,
       banner: "No PhD",
-      activities: true,
-      windows: [
-        {
-          id: "morning",
-          after: "breakfast",
-          label: "Morning window",
-          hint: "8:30–Dhuhr",
-          start: "08:30",
-          end: "12:00",
-        },
-        {
-          id: "afternoon",
-          after: "asr",
-          label: "Afternoon window",
-          hint: "2:30–Maghrib",
-          start: "14:30",
-          end: "16:25",
-        },
-      ],
+      prayers: ["fajr", "dhuhr", "asr", "maghrib", "isha"],
+      checkins: ["meds_am", "meds_pm"],
     },
   },
   days: {
@@ -46,7 +29,7 @@ export const PLAN = {
     { id: "fajr", label: "Fajr", time: "~5:45", band: "Morning" },
     { id: "woke", label: "Woke", time: "6:30–7", band: "Morning" },
     { id: "meds_am", label: "Morning medicines", band: "Morning" },
-    { id: "daylight", label: "Daylight + water", band: "Morning" },
+    { id: "daylight", label: "Daylight: 15 min outside, any time before Maghrib", band: "Morning" },
     { id: "breakfast", label: "Breakfast", time: "before 8:30", band: "Morning" },
     {
       id: "work1",

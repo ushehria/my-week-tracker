@@ -1,4 +1,4 @@
-import { dayView } from "./day-view.js?v=6";
+import { dayView } from "./day-view.js?v=9";
 import {
   addCalendarDays,
   formatDayLabel,
@@ -6,9 +6,11 @@ import {
   formatWeekTitle,
   londonDate,
   weekDates,
+  weekdayKey,
   weekStartMonday,
-} from "./london-time.js?v=6";
-import { syncStatusLabel } from "./sync.js?v=6";
+} from "./london-time.js?v=9";
+import { syncStatusLabel } from "./sync.js?v=9";
+import { readCall } from "./store.js?v=9";
 
 export function pageModel({ plan, state, selectedDate, now, syncStatus, weekStart: requestedWeek }) {
   const today = londonDate(now);
@@ -45,7 +47,13 @@ export function pageModel({ plan, state, selectedDate, now, syncStatus, weekStar
     view: dayView({ plan: activePlan, isoDate: selected, dayRecord }),
     cigs: dayRecord.cigs || "",
     energy: dayRecord.energy || "",
+    dayNote: dayRecord.note || "",
     note: week?.note || "",
+    calls: {
+      mother: readCall(dayRecord, "mother"),
+      father: readCall(dayRecord, "father"),
+    },
+    showFullWeekCopy: weekdayKey(selected) === "sun",
     syncLabel: syncStatusLabel(syncStatus),
     showsOtherWeeks: pastWeek,
   };

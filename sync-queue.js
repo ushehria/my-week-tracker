@@ -125,6 +125,13 @@ function fieldMap(state) {
       }
       if (day.cigs) addField(map, weekStart, entryDate, "cigs", day.cigs);
       if (day.energy) addField(map, weekStart, entryDate, "energy", day.energy);
+      if (String(day.note || "").trim()) addField(map, weekStart, entryDate, "note", day.note);
+      for (const parent of ["mother", "father"]) {
+        const call = day.calls?.[parent];
+        if (call && (call.done || String(call.note || "").trim())) {
+          addField(map, weekStart, entryDate, `call:${parent}`, { done: Boolean(call.done), note: call.note || "" });
+        }
+      }
       for (const activity of day.activities || []) {
         addField(map, weekStart, entryDate, `activity:${activity.id}`, activity);
       }

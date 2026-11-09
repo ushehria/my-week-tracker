@@ -4,7 +4,7 @@ import { formatLongDay, weekDates } from "./london-time.js";
 const ORIGINAL_WEEK = "2026-11-02";
 const ORIGINAL_START = "2026-11-04";
 
-export function weekSummary({ state, plan, weekStart }) {
+export function weekSummary({ state, plan, weekStart, full = false }) {
   const week = state.weeks?.[weekStart];
   const activePlan = week?.sealed && week.planSnapshot ? week.planSnapshot : plan;
   const lines = [
@@ -16,7 +16,7 @@ export function weekSummary({ state, plan, weekStart }) {
     lines.push("Logged period: Wed 4–Sun 8 Nov 2026. The app was first opened Thu 5 Nov 2026.");
   }
   if (week?.note?.trim()) lines.push(`Week note: ${week.note.trim()}`);
-  const dates = weekDates(weekStart).filter((date) => weekStart !== ORIGINAL_WEEK || date >= ORIGINAL_START);
+  const dates = weekDates(weekStart).filter((date) => full || weekStart !== ORIGINAL_WEEK || date >= ORIGINAL_START);
   for (const date of dates) {
     lines.push("");
     lines.push(formatLongDay(date));
@@ -44,6 +44,9 @@ export function weekSummary({ state, plan, weekStart }) {
     }
     lines.push(`Cigarettes: ${day.cigs ? day.cigs : "unlogged"}`);
     lines.push(`Energy 1–10: ${day.energy ? day.energy : "unlogged"}`);
+    lines.push(`Notes: ${String(day.note || "").trim() || "unlogged"}`);
+    lines.push(callLine("Call mother", day.calls?.mother));
+    lines.push(callLine("Call father", day.calls?.father));
   }
   return lines.join("\n");
 }
@@ -67,8 +70,15 @@ function labelOf(item) {
   return item.label || item.id;
 }
 
+function callLine(label, call) {
+  if (!call?.done) return `${label}: unlogged`;
+  const answer = String(call.note || "").trim();
+  return answer ? `${label}: yes — ${answer}` : `${label}: yes`;
+}
+
 function markWord(mark) {
   if (mark === "yes") return "yes";
   if (mark === "no") return "no";
+  if (mark === "skip") return "not counted";
   return "unlogged";
 }

@@ -1,25 +1,30 @@
-import { PLAN } from "./plan.js?v=6";
-import { LEGACY_PLAN } from "./legacy-plan.js?v=6";
-import { SYNC_OWNER_EMAIL } from "./sync-public.js?v=6";
-import { queueBootstrap, queueChanges } from "./sync-queue.js?v=6";
-import { weekSummary } from "./week-summary.js?v=7";
-import { addCalendarDays, weekDates } from "./london-time.js?v=6";
-import { bindAutoDate, createViewController } from "./view-date.js?v=8";
-import { pageModel } from "./page-model.js?v=8";
-import { renderDayNav, renderMain, renderSync, renderWeekNav } from "./render.js?v=8";
+import { PLAN } from "./plan.js?v=9";
+import { LEGACY_PLAN } from "./legacy-plan.js?v=9";
+import { SYNC_OWNER_EMAIL } from "./sync-public.js?v=9";
+import { queueBootstrap, queueChanges } from "./sync-queue.js?v=9";
+import { weekSummary } from "./week-summary.js?v=9";
+import { addCalendarDays, weekDates } from "./london-time.js?v=9";
+import { bindAutoDate, createViewController } from "./view-date.js?v=9";
+import { pageModel } from "./page-model.js?v=9";
+import { renderDayNav, renderMain, renderSync, renderWeekNav } from "./render.js?v=9";
 import {
   addActivity,
+  adjustCigs,
   clearDay,
   LEGACY_STORE_KEY,
   loadState,
   removeActivity,
+  saveFlexibleActivity,
   saveState,
   sealDueWeeks,
+  setCall,
+  setDayNote,
   setDayValue,
   recordWindowEdit,
   setMark,
   setWeekNote,
-} from "./store.js?v=6";
+  shouldAskCall,
+} from "./store.js?v=9";
 import {
   liveSyncStatus,
   pushSupabase,
@@ -29,7 +34,7 @@ import {
   signInFailure,
   verifyMagicLink,
   writeSession,
-} from "./sync.js?v=6";
+} from "./sync.js?v=9";
 
 export function startApp(doc, options = {}) {
   const view = doc.defaultView;
@@ -45,6 +50,8 @@ export function startApp(doc, options = {}) {
 
   const controller = createViewController({ now });
   let summaryOpen = false;
+  let activityError = "";
+  let promptParent = null;
   let syncMessage = "";
   let revision = 0;
   let flushing = false;
@@ -97,7 +104,9 @@ export function startApp(doc, options = {}) {
     const current = model();
     doc.title = `${current.title} · ${current.range}`;
     title.textContent = `${current.title} · ${current.range}`;
-    sub.textContent = current.viewingHint ? `${current.range} · ${current.viewingHint}` : "Tap · → ✓ → ✗. Saves on this phone.";
+    current.activityError = activityError;
+    current.promptParent = promptParent;
+    sub.textContent = current.viewingHint ? `${current.range} · ${current.viewingHint}` : "Tap · → ✓ → ✗ → –. – is not counted.";
     sync.innerHTML = renderSync(current);
     doc.getElementById("weekNav").innerHTML = renderWeekNav(current);
     dayTop.innerHTML = renderDayNav(current);
@@ -106,8 +115,8 @@ export function startApp(doc, options = {}) {
     view.scrollTo(0, y);
   }
 
-  async function copyWeek(button, weekStart, label) {
-    const text = weekSummary({ state, plan: PLAN, weekStart });
+  async function copyWeek(button, weekStart, label, options = {}) {
+    const text = weekSummary({ state, plan: PLAN, weekStart, full: Boolean(options.full) });
     const box = doc.getElementById("summaryBox");
     if (box) {
       box.hidden = false;
@@ -173,17 +182,51 @@ export function startApp(doc, options = {}) {
       view.scrollTo(0, 0);
       return;
     }
+    if (button.dataset.cig) {
+      commit(adjustCigs(state, current.selectedDate, Number(button.dataset.cig)));
+      draw();
+      return;
+    }
     if (button.dataset.habit) {
-      const item = current.view.bands.flatMap((band) => band.items).find((entry) => entry.id === button.dataset.habit);
+      const item = findHabit(current.view, button.dataset.habit);
       commit(setMark(state, current.selectedDate, button.dataset.habit, cycleMark(item?.mark || "")));
       draw();
       return;
     }
     if (button.id === "add-activity") {
+      if (current.view.flexible) {
+        const result = saveFlexibleActivity(state, current.selectedDate, {
+          id: view.crypto?.randomUUID?.() || `activity-${Date.now()}`,
+          title: doc.getElementById("activity-title")?.value || "",
+          start: doc.getElementById("activity-start")?.value || "",
+          end: doc.getElementById("activity-end")?.value || "",
+        });
+        if (!result.ok) {
+          activityError = result.error;
+          draw();
+          return;
+        }
+        activityError = "";
+        commit(result.state);
+        draw();
+        return;
+      }
       const id = view.crypto?.randomUUID?.() || `window-${Date.now()}`;
       commit(addActivity(state, current.selectedDate, { id }));
       draw();
       doc.querySelector(`[data-activity="${id}"]`)?.scrollIntoView({ block: "center" });
+      return;
+    }
+    if (button.id === "call-save" && promptParent) {
+      const note = doc.getElementById("call-response")?.value || "";
+      commit(setCall(state, current.selectedDate, promptParent, { done: true, note }));
+      promptParent = null;
+      draw();
+      return;
+    }
+    if (button.id === "call-skip") {
+      promptParent = null;
+      draw();
       return;
     }
     if (button.dataset.removeActivity) {
@@ -204,6 +247,10 @@ export function startApp(doc, options = {}) {
       void copyWeek(button, current.lastWeekStart, "Copy last week summary");
       return;
     }
+    if (button.id === "copy-full-week") {
+      void copyWeek(button, current.weekStart, "Copy full week summary", { full: true });
+      return;
+    }
     if (button.id === "sync-send-link") void sendLink();
     if (button.id === "sync-use-link") void useLink();
   });
@@ -215,12 +262,36 @@ export function startApp(doc, options = {}) {
       commit(setDayValue(state, current.selectedDate, target.id, target.value));
       return;
     }
+    if (target.id === "day-note") {
+      commit(setDayNote(state, current.selectedDate, target.value));
+      return;
+    }
     if (target.id === "note") {
       commit(setWeekNote(state, current.selectedDate, target.value));
       return;
     }
     const field = target.getAttribute?.("data-field");
     const card = target.closest?.("[data-activity]");
+    if (current.view.flexible && card && card.id !== "new-activity") {
+      const activityId = card.getAttribute("data-activity");
+      const result = saveFlexibleActivity(state, current.selectedDate, {
+        id: activityId,
+        title: card.querySelector('[data-field="title"]')?.value || "",
+        start: card.querySelector('[data-field="start"]')?.value || "",
+        end: card.querySelector('[data-field="end"]')?.value || "",
+      });
+      if (!result.ok) {
+        activityError = result.error;
+        const error = doc.getElementById("activity-error");
+        if (error) error.textContent = result.error;
+        return;
+      }
+      activityError = "";
+      const error = doc.getElementById("activity-error");
+      if (error) error.textContent = "";
+      commit(result.state);
+      return;
+    }
     if (field && card) {
       const activityId = card.getAttribute("data-activity");
       const shown = current.view.bands.flatMap((band) => band.items).find((item) => item.id === activityId)
@@ -233,6 +304,19 @@ export function startApp(doc, options = {}) {
         duration: shown?.duration || "",
       }, field, target.value));
     }
+  });
+
+  doc.body.addEventListener("change", (event) => {
+    const target = event.target;
+    if (target.id !== "call-mother" && target.id !== "call-father") return;
+    const parent = target.id === "call-mother" ? "mother" : "father";
+    const current = model();
+    const previous = current.calls[parent];
+    const done = Boolean(target.checked);
+    commit(setCall(state, current.selectedDate, parent, { done }));
+    if (shouldAskCall(previous.done, done)) promptParent = parent;
+    else if (promptParent === parent) promptParent = null;
+    draw();
   });
 
   function copySummary(button) {
@@ -358,13 +442,25 @@ export function startApp(doc, options = {}) {
 function dayHasLog(state, weekStart, iso) {
   const day = state.weeks?.[weekStart]?.days?.[iso];
   if (!day) return false;
-  if (day.cigs || day.energy || day.activities?.length) return true;
+  if (day.cigs || day.energy || day.note || day.activities?.length) return true;
+  if (day.calls?.mother?.done || day.calls?.father?.done) return true;
   return Object.keys(day.marks || {}).length > 0;
+}
+
+function findHabit(view, id) {
+  const pools = [
+    ...(view.bands || []).flatMap((band) => band.items),
+    ...(view.prayers || []),
+    ...(view.checkins || []),
+    ...(view.preserved || []),
+  ];
+  return pools.find((item) => item.id === id);
 }
 
 function cycleMark(current) {
   if (current === "yes") return "no";
-  if (current === "no") return "";
+  if (current === "no") return "skip";
+  if (current === "skip") return "";
   return "yes";
 }
 

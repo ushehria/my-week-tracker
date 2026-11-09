@@ -112,6 +112,7 @@
   }
   .mark.yes { background: var(--yes-bg); color: var(--yes); border-color: #b9e4cb; }
   .mark.no { background: var(--no-bg); color: var(--no); border-color: #f3c0bb; }
+  .mark.skip { background: #f4f1e8; color: #6b5b2a; border-color: #e4d7a8; }
   .label { flex: 1; font-weight: 600; }
   .time, .note, .hint { display: block; font-weight: 400; color: var(--muted); font-size: 13px; margin-top: 2px; }
   .hint { margin: 0; padding: 0 14px 8px; }
@@ -141,6 +142,14 @@
     color: #fff;
   }
   .btn.secondary { background: #e8eeee; color: var(--ink); }
+  .btn.full-week { margin: 12px 0 0; padding: 18px 14px; font-size: 18px; background: #1f4f55; }
+  .counter { display: grid; grid-template-columns: 1fr auto 72px auto; gap: 8px; align-items: center; }
+  .counter span { font-size: 13px; color: var(--muted); font-weight: 600; }
+  .counter .btn { padding: 12px 0; min-width: 48px; }
+  .form-error { color: var(--no); font-size: 13px; padding: 0 14px 8px; font-weight: 600; }
+  .calls { display: grid; gap: 8px; padding: 0 14px 14px; }
+  .call-row { display: flex; align-items: center; gap: 10px; font-size: 16px; color: var(--ink); font-weight: 600; }
+  .call-row input { width: 22px; height: 22px; }
   .week-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
   .week-nav .btn { padding: 10px 8px; }
   .week-nav #copy-last-week { grid-column: 1 / -1; }
@@ -189,6 +198,6 @@
 <p class="saved" id="savedMsg">Saved on this phone</p>
 <main id="app"></main>
 <footer-bar><div class="days" id="dayBottom"></div></footer-bar>
-<script type="module" src="./app.js?v=8"></script>
+<script type="module" src="./app.js?v=9"></script>
 </body>
 </html>

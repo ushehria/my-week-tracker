@@ -1,4 +1,5 @@
-import { weekdayKey } from "./london-time.js?v=6";
+import { presentActivity, sortActivities } from "./activity-rules.js?v=9";
+import { weekdayKey } from "./london-time.js?v=9";
 
 const ACTIVITY_FIELDS = ["start", "end", "place", "duration"];
 
@@ -7,6 +8,7 @@ export function dayView({ plan, isoDate, dayRecord }) {
   const dayPlan = plan.days[key];
   const layout = plan.layouts[dayPlan.layout];
   const record = dayRecord || { marks: {}, activities: [] };
+  if (layout.flexible) return flexibleDayView({ plan, key, layout, record, isoDate });
   const bands = layout.bands
     .map((band) => ({
       title: band,
@@ -64,6 +66,38 @@ export function dayView({ plan, isoDate, dayRecord }) {
             })),
         }
       : null,
+  };
+}
+
+function flexibleDayView({ plan, key, layout, record, isoDate }) {
+  const prayers = (layout.prayers || [])
+    .map((id) => plan.habits.find((habit) => habit.id === id))
+    .filter(Boolean)
+    .map((habit) => presentHabit(habit, key, record));
+  const checkins = (layout.checkins || [])
+    .map((id) => plan.habits.find((habit) => habit.id === id))
+    .filter(Boolean)
+    .map((habit) => ({ ...presentHabit(habit, key, record), time: "", note: "" }));
+  const shown = new Set([...(layout.prayers || []), ...(layout.checkins || [])]);
+  const preserved = Object.entries(record.marks || {})
+    .filter(([id, mark]) => mark && !shown.has(id))
+    .map(([id, mark]) => {
+      const habit = plan.habits.find((item) => item.id === id);
+      return { id, label: habit?.label || id, mark, time: "", note: "" };
+    });
+  return {
+    isoDate,
+    layout: "open",
+    flexible: true,
+    banner: layout.banner || "",
+    bands: [],
+    prayers,
+    checkins,
+    preserved,
+    activities: {
+      enabled: true,
+      items: sortActivities((record.activities || []).map(presentActivity)),
+    },
   };
 }
 
