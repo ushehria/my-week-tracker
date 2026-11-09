@@ -22,7 +22,12 @@ export function escapeHtml(value) {
 }
 
 export function renderPage(model) {
-  return `${renderSync(model)}<p class="range">${escapeHtml(model.range)}</p>${renderDayNav(model)}${renderMain(model)}`;
+  return `${renderSync(model)}<p class="range">${escapeHtml(model.range)}</p>${renderWeekNav(model)}${renderDayNav(model)}${renderMain(model)}`;
+}
+
+export function renderWeekNav(model) {
+  const next = model.canGoNext ? "" : " disabled";
+  return `<button type="button" class="btn secondary" id="prev-week" data-week-shift="-1">Previous week</button><button type="button" class="btn secondary" id="next-week" data-week-shift="1"${next}>Next week</button><button type="button" class="btn" id="copy-last-week">Copy last week summary</button>`;
 }
 
 export function renderSync(model) {
@@ -56,7 +61,7 @@ export function renderMain(model) {
   const bands = model.view.bands
     .map((band) => `<section><h2>${escapeHtml(band.title)}</h2>${band.items.map(renderItem).join("")}</section>`)
     .join("");
-  return `<h2 class="day-heading">${escapeHtml(model.heading)}</h2>${banner}${bands}${renderActivities(model)}${renderLog(model)}`;
+  return `<pre id="summaryBox" hidden tabindex="0"></pre><h2 class="day-heading">${escapeHtml(model.heading)}</h2>${banner}${bands}${renderActivities(model)}${renderLog(model)}`;
 }
 
 function renderItem(item) {
@@ -102,7 +107,6 @@ function renderLog(model) {
   </div>
   <div class="actions">
     <button type="button" class="btn" id="copy-week">Copy week summary</button>
-    <pre id="summaryBox" hidden tabindex="0"></pre>
     <button type="button" class="btn secondary" id="clear-day">Clear this day's marks</button>
   </div></section>`;
 }

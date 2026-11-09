@@ -3,9 +3,10 @@ import { LEGACY_PLAN } from "./legacy-plan.js?v=6";
 import { SYNC_OWNER_EMAIL } from "./sync-public.js?v=6";
 import { queueBootstrap, queueChanges } from "./sync-queue.js?v=6";
 import { weekSummary } from "./week-summary.js?v=7";
-import { bindAutoDate, createViewController } from "./view-date.js?v=6";
-import { pageModel } from "./page-model.js?v=6";
-import { renderDayNav, renderMain, renderSync } from "./render.js?v=6";
+import { addCalendarDays, weekDates } from "./london-time.js?v=6";
+import { bindAutoDate, createViewController } from "./view-date.js?v=8";
+import { pageModel } from "./page-model.js?v=8";
+import { renderDayNav, renderMain, renderSync, renderWeekNav } from "./render.js?v=8";
 import {
   addActivity,
   clearDay,
@@ -63,6 +64,7 @@ export function startApp(doc, options = {}) {
       plan: PLAN,
       state,
       selectedDate: controller.selectedDate(),
+      weekStart: controller.weekStart(),
       now: now(),
       syncStatus: session ? liveSyncStatus(state, session) : "unsigned",
     });
@@ -97,19 +99,21 @@ export function startApp(doc, options = {}) {
     title.textContent = `${current.title} · ${current.range}`;
     sub.textContent = current.viewingHint ? `${current.range} · ${current.viewingHint}` : "Tap · → ✓ → ✗. Saves on this phone.";
     sync.innerHTML = renderSync(current);
+    doc.getElementById("weekNav").innerHTML = renderWeekNav(current);
     dayTop.innerHTML = renderDayNav(current);
     dayBottom.innerHTML = renderDayNav(current);
     app.innerHTML = renderMain(current);
     view.scrollTo(0, y);
   }
 
-  async function copyWeek(button) {
-    const text = weekSummary({ state, plan: PLAN, weekStart: model().weekStart });
+  async function copyWeek(button, weekStart, label) {
+    const text = weekSummary({ state, plan: PLAN, weekStart });
     const box = doc.getElementById("summaryBox");
     if (box) {
       box.hidden = false;
       box.textContent = text;
       selectText(box);
+      box.scrollIntoView({ block: "nearest" });
     }
     button.textContent = "Copying…";
     let copied = false;
@@ -130,7 +134,8 @@ export function startApp(doc, options = {}) {
     }
     button.textContent = copied ? "Copied" : "Select the summary";
     view.setTimeout(() => {
-      if (doc.getElementById("copy-week")) button.textContent = "Copy week summary";
+      const live = doc.getElementById(button.id);
+      if (live) live.textContent = label;
     }, 2000);
   }
 
@@ -151,6 +156,16 @@ export function startApp(doc, options = {}) {
     const button = event.target.closest("button");
     if (!button) return;
     const current = model();
+    if (button.dataset.weekShift) {
+      const start = addCalendarDays(current.weekStart, Number(button.dataset.weekShift) * 7);
+      const days = weekDates(start);
+      const logged = days.find((iso) => dayHasLog(state, start, iso));
+      controller.showWeek(start, days.includes(current.today) ? current.today : logged || days[0]);
+      summaryOpen = false;
+      draw();
+      view.scrollTo(0, 0);
+      return;
+    }
     if (button.dataset.date) {
       controller.selectManually(button.dataset.date);
       summaryOpen = false;
@@ -182,7 +197,11 @@ export function startApp(doc, options = {}) {
       return;
     }
     if (button.id === "copy-week") {
-      void copyWeek(button);
+      void copyWeek(button, current.weekStart, "Copy week summary");
+      return;
+    }
+    if (button.id === "copy-last-week") {
+      void copyWeek(button, current.lastWeekStart, "Copy last week summary");
       return;
     }
     if (button.id === "sync-send-link") void sendLink();
@@ -334,6 +353,13 @@ export function startApp(doc, options = {}) {
       flushing = false;
     }
   }
+}
+
+function dayHasLog(state, weekStart, iso) {
+  const day = state.weeks?.[weekStart]?.days?.[iso];
+  if (!day) return false;
+  if (day.cigs || day.energy || day.activities?.length) return true;
+  return Object.keys(day.marks || {}).length > 0;
 }
 
 function cycleMark(current) {

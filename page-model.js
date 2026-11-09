@@ -1,5 +1,6 @@
 import { dayView } from "./day-view.js?v=6";
 import {
+  addCalendarDays,
   formatDayLabel,
   formatLongDay,
   formatWeekTitle,
@@ -9,11 +10,13 @@ import {
 } from "./london-time.js?v=6";
 import { syncStatusLabel } from "./sync.js?v=6";
 
-export function pageModel({ plan, state, selectedDate, now, syncStatus }) {
+export function pageModel({ plan, state, selectedDate, now, syncStatus, weekStart: requestedWeek }) {
   const today = londonDate(now);
-  const weekStart = weekStartMonday(today);
+  const currentWeek = weekStartMonday(today);
+  const weekStart = requestedWeek && requestedWeek <= currentWeek ? requestedWeek : currentWeek;
   const days = weekDates(weekStart);
-  const selected = days.includes(selectedDate) ? selectedDate : today;
+  const selected = days.includes(selectedDate) ? selectedDate : weekStart === currentWeek ? today : days[0];
+  const pastWeek = weekStart < currentWeek;
   const week = state.weeks?.[weekStart];
   const dayRecord = week?.days?.[selected] || { marks: {}, cigs: "", energy: "", activities: [] };
   const activePlan = week?.sealed && week.planSnapshot ? week.planSnapshot : plan;
@@ -21,8 +24,15 @@ export function pageModel({ plan, state, selectedDate, now, syncStatus }) {
     title: "My Week",
     range: formatWeekTitle(weekStart),
     heading: formatLongDay(selected),
-    viewingHint: selected === today ? "" : `Today is ${formatDayLabel(today)}`,
+    viewingHint: pastWeek
+      ? `Earlier week. Today is ${formatDayLabel(today)}`
+      : selected === today
+        ? ""
+        : `Today is ${formatDayLabel(today)}`,
     today,
+    currentWeek,
+    lastWeekStart: addCalendarDays(currentWeek, -7),
+    canGoNext: pastWeek,
     selectedDate: selected,
     weekStart,
     days: days.map((iso) => ({
@@ -37,6 +47,6 @@ export function pageModel({ plan, state, selectedDate, now, syncStatus }) {
     energy: dayRecord.energy || "",
     note: week?.note || "",
     syncLabel: syncStatusLabel(syncStatus),
-    showsOtherWeeks: false,
+    showsOtherWeeks: pastWeek,
   };
 }

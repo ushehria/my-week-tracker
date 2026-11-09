@@ -141,6 +141,10 @@
     color: #fff;
   }
   .btn.secondary { background: #e8eeee; color: var(--ink); }
+  .week-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+  .week-nav .btn { padding: 10px 8px; }
+  .week-nav #copy-last-week { grid-column: 1 / -1; }
+  .week-nav button:disabled { opacity: .45; }
   .saved {
     color: var(--muted);
     font-size: 12px;
@@ -179,11 +183,12 @@
   <h1 id="title">My Week</h1>
   <p class="sub" id="sub">Saves on this phone.</p>
   <div id="sync"></div>
+  <div class="week-nav" id="weekNav"></div>
   <div class="days" id="dayTop"></div>
 </header>
 <p class="saved" id="savedMsg">Saved on this phone</p>
 <main id="app"></main>
 <footer-bar><div class="days" id="dayBottom"></div></footer-bar>
-<script type="module" src="./app.js?v=7"></script>
+<script type="module" src="./app.js?v=8"></script>
 </body>
 </html>
