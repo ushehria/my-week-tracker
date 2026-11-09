@@ -56,6 +56,7 @@ export function startApp(doc, options = {}) {
   let revision = 0;
   let flushing = false;
   let flushAgain = false;
+  let syncTimer = null;
 
   const title = doc.getElementById("title");
   const sub = doc.getElementById("sub");
@@ -96,22 +97,50 @@ export function startApp(doc, options = {}) {
     state = next;
     saveState(storage, state);
     touchSaved();
-    void flushSync();
+    scheduleSync();
+  }
+
+  function scheduleSync() {
+    if (syncTimer) syncTimer.cancel();
+    let cancelled = false;
+    syncTimer = {
+      cancel() {
+        cancelled = true;
+      },
+    };
+    schedule(SYNC_PAUSE, () => {
+      if (cancelled) return;
+      syncTimer = null;
+      return flushSync();
+    });
+  }
+
+  function editingField() {
+    const el = doc.activeElement;
+    if (!el || el === doc.body || el === doc.documentElement) return null;
+    const tag = String(el.tagName || "").toUpperCase();
+    if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") return null;
+    return el;
   }
 
   function draw() {
     const y = view.scrollY || 0;
     const current = model();
+    const field = editingField();
     doc.title = `${current.title} · ${current.range}`;
     title.textContent = `${current.title} · ${current.range}`;
     current.activityError = activityError;
     current.promptParent = promptParent;
     sub.textContent = current.viewingHint ? `${current.range} · ${current.viewingHint}` : "Tap · → ✓ → ✗ → –. – is not counted.";
-    sync.innerHTML = renderSync(current);
+    const lockMain = Boolean(field && app.contains(field));
+    const lockSync = Boolean(field && sync.contains(field));
+    if (!lockSync) sync.innerHTML = renderSync(current);
     doc.getElementById("weekNav").innerHTML = renderWeekNav(current);
-    dayTop.innerHTML = renderDayNav(current);
-    dayBottom.innerHTML = renderDayNav(current);
-    app.innerHTML = renderMain(current);
+    if (!lockMain) {
+      dayTop.innerHTML = renderDayNav(current);
+      dayBottom.innerHTML = renderDayNav(current);
+      app.innerHTML = renderMain(current);
+    }
     view.scrollTo(0, y);
   }
 
@@ -306,6 +335,12 @@ export function startApp(doc, options = {}) {
     }
   });
 
+  doc.body.addEventListener("focusout", () => {
+    schedule(0, () => {
+      if (!editingField()) draw();
+    });
+  });
+
   doc.body.addEventListener("change", (event) => {
     const target = event.target;
     if (target.id !== "call-mother" && target.id !== "call-father") return;
@@ -494,4 +529,6 @@ function summaryText(current) {
   return lines.join("\n");
 }
 
-startApp(document);
+const SYNC_PAUSE = 600;
+
+if (typeof document !== "undefined") startApp(document);
