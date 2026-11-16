@@ -19,6 +19,7 @@ import {
   sealDueWeeks,
   setCall,
   setDayNote,
+  setSick,
   setDayValue,
   recordWindowEdit,
   setMark,
@@ -52,6 +53,7 @@ export function startApp(doc, options = {}) {
   let summaryOpen = false;
   let activityError = "";
   let promptParent = null;
+  let bonusOpen = false;
   let syncMessage = "";
   let revision = 0;
   let flushing = false;
@@ -131,6 +133,7 @@ export function startApp(doc, options = {}) {
     title.textContent = `${current.title} · ${current.range}`;
     current.activityError = activityError;
     current.promptParent = promptParent;
+    current.bonusOpen = bonusOpen;
     sub.textContent = current.viewingHint ? `${current.range} · ${current.viewingHint}` : "Tap · → ✓ → ✗ → –. – is not counted.";
     const lockMain = Boolean(field && app.contains(field));
     const lockSync = Boolean(field && sync.contains(field));
@@ -202,6 +205,11 @@ export function startApp(doc, options = {}) {
       summaryOpen = false;
       draw();
       view.scrollTo(0, 0);
+      return;
+    }
+    if (button.id === "bonus-toggle") {
+      bonusOpen = !bonusOpen;
+      draw();
       return;
     }
     if (button.dataset.date) {
@@ -343,6 +351,12 @@ export function startApp(doc, options = {}) {
 
   doc.body.addEventListener("change", (event) => {
     const target = event.target;
+    if (target.id === "sick-day") {
+      const current = model();
+      commit(setSick(state, current.selectedDate, Boolean(target.checked)));
+      draw();
+      return;
+    }
     if (target.id !== "call-mother" && target.id !== "call-father") return;
     const parent = target.id === "call-mother" ? "mother" : "father";
     const current = model();
@@ -488,6 +502,10 @@ function findHabit(view, id) {
     ...(view.prayers || []),
     ...(view.checkins || []),
     ...(view.preserved || []),
+    ...(view.focusItems || []),
+    ...(view.bonusItems || []),
+    ...(view.alwaysItems || []),
+    ...(view.sickItems || []),
   ];
   return pools.find((item) => item.id === id);
 }

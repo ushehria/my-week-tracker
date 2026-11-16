@@ -126,6 +126,7 @@ function fieldMap(state) {
       if (day.cigs) addField(map, weekStart, entryDate, "cigs", day.cigs);
       if (day.energy) addField(map, weekStart, entryDate, "energy", day.energy);
       if (String(day.note || "").trim()) addField(map, weekStart, entryDate, "note", day.note);
+      if (day.sick) addField(map, weekStart, entryDate, "sick", true);
       for (const parent of ["mother", "father"]) {
         const call = day.calls?.[parent];
         if (call && (call.done || String(call.note || "").trim())) {

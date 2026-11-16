@@ -79,6 +79,14 @@ export function setCall(state, iso, parent, { done, note } = {}) {
   return next;
 }
 
+export function setSick(state, iso, value) {
+  const next = clone(state);
+  const week = ensureWeek(next, weekStartMonday(iso));
+  ensureDay(week, iso).sick = Boolean(value);
+  refreshPending(next, week.weekStart);
+  return next;
+}
+
 export function setDayNote(state, iso, value) {
   const next = clone(state);
   const week = ensureWeek(next, weekStartMonday(iso));

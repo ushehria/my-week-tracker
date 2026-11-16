@@ -61,6 +61,7 @@ export function renderMain(model) {
   if (model.view.flexible) {
     return `${dayIntro(model)}${banner}${renderNamedHabits("Prayers", model.view.prayers)}${renderFlexibleActivities(model)}${renderNamedHabits("Check-ins", model.view.checkins)}${renderNamedHabits("Saved checks", model.view.preserved)}${renderLog(model)}`;
   }
+  if (model.view.focus) return `${dayIntro(model)}${renderFocus(model)}`;
   const bands = (model.view.bands || [])
     .map((band) => `<section><h2>${escapeHtml(band.title)}</h2>${band.items.map(renderItem).join("")}</section>`)
     .join("");
@@ -84,12 +85,60 @@ function renderItem(item) {
   return renderHabit(item);
 }
 
-function renderHabit(item) {
+function renderHabit(item, options = {}) {
+  const waived = options.waived && !item.mark;
+  const shown = waived ? "skip" : item.mark;
   const time = item.time ? `<span class="time">${escapeHtml(item.time)}</span>` : "";
   const note = item.note ? `<span class="note">${escapeHtml(item.note)}</span>` : "";
-  const markClass = item.mark === "yes" || item.mark === "no" || item.mark === "skip" ? ` ${item.mark}` : "";
-  const symbol = item.mark === "yes" ? "✓" : item.mark === "no" ? "✗" : item.mark === "skip" ? "–" : "·";
+  const markClass = shown === "yes" || shown === "no" || shown === "skip" ? ` ${shown}` : "";
+  const symbol = shown === "yes" ? "✓" : shown === "no" ? "✗" : shown === "skip" ? "–" : "·";
   return `<button type="button" class="row" data-habit="${escapeHtml(item.id)}"><div class="mark${markClass}">${symbol}</div><div class="label">${escapeHtml(item.label)}${time}${note}</div></button>`;
+}
+
+function renderFocus(model) {
+  const view = model.view;
+  const tone = cigTone(model.cigs, view.cigsTarget);
+  const toneClass = tone ? ` ${tone}` : "";
+  const bonusHidden = model.bonusOpen ? "" : " hidden";
+  const waived = (item) => model.sick && !item.mark;
+  const minimum = model.sick
+    ? `<div class="minimum-list"><h3>${escapeHtml(view.sickTitle || "Minimum plan")}</h3><p class="hint">${escapeHtml(view.sickNote || "")}</p>${(view.sickItems || []).map((item) => renderHabit(item)).join("")}</div>`
+    : "";
+  return `<section class="focus-card"><h2>${escapeHtml(view.focusTitle)}</h2>${(view.focusItems || []).map((item) => renderHabit(item)).join("")}<div class="counter"><span>Cigarettes</span><button type="button" class="btn secondary" id="cigs-dec" data-cig="-1">−</button><input id="cigs" inputmode="numeric" autocomplete="off" value="${escapeHtml(model.cigs)}"><button type="button" class="btn secondary" id="cigs-inc" data-cig="1">+</button></div><p class="cig-target${toneClass}">${escapeHtml(view.cigsTargetLabel || "")}</p></section><section class="bonus"><button type="button" class="section-toggle" id="bonus-toggle" aria-expanded="${model.bonusOpen ? "true" : "false"}"><h2>${escapeHtml(view.bonusTitle)}</h2><span>${model.bonusOpen ? "Hide" : "Show"}</span></button>${model.sick ? `<p class="hint">${escapeHtml(view.sickNote || "")}</p>` : ""}<div id="bonus-body"${bonusHidden}>${(view.bonusItems || []).map((item) => renderHabit(item, { waived: waived(item) })).join("")}</div></section><section><h2>${escapeHtml(view.alwaysTitle)}</h2>${(view.alwaysItems || []).map((item) => renderHabit(item)).join("")}</section>${renderToday(model, minimum)}`;
+}
+
+function cigTone(value, target) {
+  const count = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(count) || target == null) return "";
+  return count <= target ? "ok" : "over";
+}
+
+function renderToday(model, minimum) {
+  const checked = model.sick ? " checked" : "";
+  return `<section id="today"><h2>Today</h2><div class="fields">
+    <label>Energy 1–10<input id="energy" inputmode="numeric" autocomplete="off" value="${escapeHtml(model.energy)}"></label>
+    <label class="call-row sick-row"><input type="checkbox" id="sick-day"${checked}> 🤒 Sick day</label>
+    ${minimum}
+    <label>Notes<textarea id="day-note" rows="3" placeholder="This day only">${escapeHtml(model.dayNote || "")}</textarea></label>
+    <label>Week note<textarea id="note" rows="3" placeholder="Shared across this week">${escapeHtml(model.note)}</textarea></label>
+  </div>
+  <div class="calls">
+    ${renderCall(model, "mother", "Call mother")}
+    ${renderCall(model, "father", "Call father")}
+    <p class="hint">Stays on this phone with the rest of the day.</p>
+    <div id="call-prompt"${model.promptParent ? ` data-parent="${escapeHtml(model.promptParent)}"` : " hidden"}>
+      <p>How did the call go?</p>
+      <textarea id="call-response" rows="2" placeholder="Optional"></textarea>
+      <div class="actions">
+        <button type="button" class="btn" id="call-save">Save</button>
+        <button type="button" class="btn secondary" id="call-skip">Skip</button>
+      </div>
+    </div>
+  </div>
+  <div class="actions">
+    <button type="button" class="btn" id="copy-week">Copy week summary</button>
+    <button type="button" class="btn secondary" id="clear-day">Clear this day's marks</button>
+  </div></section>`;
 }
 
 function renderWindow(item, removable) {

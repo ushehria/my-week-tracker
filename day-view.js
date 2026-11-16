@@ -46,7 +46,7 @@ export function dayView({ plan, isoDate, dayRecord }) {
     if (!placed && bands[0]) bands[0].items.push(windowItem);
   }
 
-  return {
+  const view = {
     isoDate,
     layout: dayPlan.layout,
     banner: layout.banner || "",
@@ -67,6 +67,41 @@ export function dayView({ plan, isoDate, dayRecord }) {
         }
       : null,
   };
+  if (!layout.focus) return view;
+  const presented = (specs) => (specs || []).map((spec) => presentSpec(plan, key, record, spec)).filter(Boolean);
+  const sickItems = presented(layout.sickItems);
+  sickItems.push({
+    id: "rest",
+    label: layout.restLabel || "Rest",
+    time: "",
+    note: "",
+    mark: record.marks?.rest || "",
+  });
+  return {
+    ...view,
+    focus: true,
+    focusTitle: layout.title || "Focus",
+    focusItems: presented(layout.focusItems),
+    cigsTarget: layout.cigsTarget,
+    cigsTargetLabel: layout.cigsTargetLabel || "",
+    bonusTitle: layout.bonusTitle || "Bonus",
+    bonusItems: presented(layout.bonusItems),
+    alwaysTitle: layout.alwaysTitle || "Always",
+    alwaysItems: presented(layout.alwaysItems),
+    sickTitle: layout.sickTitle || "Minimum plan",
+    sickNote: layout.sickNote || "",
+    sickItems,
+  };
+}
+
+function presentSpec(plan, key, record, spec) {
+  const habit = plan.habits.find((item) => item.id === spec.id);
+  if (!habit) return null;
+  const item = presentHabit(habit, key, record);
+  if (spec.label) item.label = spec.label;
+  if (Object.prototype.hasOwnProperty.call(spec, "time")) item.time = spec.time;
+  if (Object.prototype.hasOwnProperty.call(spec, "note")) item.note = spec.note;
+  return item;
 }
 
 function flexibleDayView({ plan, key, layout, record, isoDate }) {

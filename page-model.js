@@ -54,6 +54,8 @@ export function pageModel({ plan, state, selectedDate, now, syncStatus, weekStar
       father: readCall(dayRecord, "father"),
     },
     showFullWeekCopy: weekdayKey(selected) === "sun",
+    sick: Boolean(dayRecord.sick),
+    bonusOpen: false,
     syncLabel: syncStatusLabel(syncStatus),
     showsOtherWeeks: pastWeek,
   };
