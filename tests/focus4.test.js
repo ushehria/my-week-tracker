@@ -6,6 +6,19 @@ import { pageModel } from "../page-model.js";
 import { renderPage } from "../render.js";
 import { blankState, setMark, setSick } from "../store.js";
 
+test("Focus 4 applies only to weekdays in the week of 16 Nov 2026", () => {
+  const monday = dayView({ plan: PLAN, isoDate: "2026-11-16", dayRecord: { marks: {}, activities: [] } });
+  const nextMonday = dayView({ plan: PLAN, isoDate: "2026-11-23", dayRecord: { marks: {}, activities: [] } });
+  const earlierMonday = dayView({ plan: PLAN, isoDate: "2026-11-09", dayRecord: { marks: {}, activities: [] } });
+  const sunday = dayView({ plan: PLAN, isoDate: "2026-11-22", dayRecord: { marks: {}, activities: [] } });
+  assert.equal(monday.focus, true);
+  assert.equal(nextMonday.focus, undefined);
+  assert.equal(earlierMonday.focus, undefined);
+  assert.equal(sunday.focus, undefined);
+  assert.ok(nextMonday.bands.flatMap((band) => band.items).some((item) => item.id === "work1"));
+  assert.ok(nextMonday.bands.flatMap((band) => band.items).some((item) => item.label.includes("15 min outside")));
+});
+
 test("Tuesday uses the Focus 4 layout and keeps bonus collapsed", () => {
   const state = setMark(blankState(), "2026-11-17", "meds_am", "yes");
   const withCigs = structuredClone(state);

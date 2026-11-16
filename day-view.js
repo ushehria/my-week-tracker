@@ -1,11 +1,11 @@
 import { presentActivity, sortActivities } from "./activity-rules.js?v=9";
-import { weekdayKey } from "./london-time.js?v=9";
+import { weekdayKey, weekStartMonday } from "./london-time.js?v=12";
 
 const ACTIVITY_FIELDS = ["start", "end", "place", "duration"];
 
 export function dayView({ plan, isoDate, dayRecord }) {
   const key = weekdayKey(isoDate);
-  const dayPlan = plan.days[key];
+  const dayPlan = plan.weeks?.[weekStartMonday(isoDate)]?.[key] || plan.days[key];
   const layout = plan.layouts[dayPlan.layout];
   const record = dayRecord || { marks: {}, activities: [] };
   if (layout.flexible) return flexibleDayView({ plan, key, layout, record, isoDate });

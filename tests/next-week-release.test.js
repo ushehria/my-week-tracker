@@ -32,8 +32,8 @@ test("not counted is a third mark, and daylight names the afternoon window", () 
     now: new Date("2026-11-09T08:00:00Z"),
     syncStatus: "unsigned",
   }));
-  assert.match(html, /Daylight/);
-  assert.match(html, /15 min before Maghrib/);
+  assert.match(html, /Daylight: 15 min outside, any time before Maghrib/);
+  assert.doesNotMatch(html, /⭐ Focus 4/);
   assert.match(html, /class="mark skip"/);
   assert.match(html, /–/);
   assert.doesNotMatch(html, /id="copy-full-week"/);

@@ -1,11 +1,11 @@
-import { PLAN } from "./plan.js?v=11";
+import { PLAN } from "./plan.js?v=12";
 import { LEGACY_PLAN } from "./legacy-plan.js?v=9";
 import { SYNC_OWNER_EMAIL } from "./sync-public.js?v=9";
 import { queueBootstrap, queueChanges } from "./sync-queue.js?v=9";
 import { weekSummary } from "./week-summary.js?v=9";
 import { addCalendarDays, weekDates } from "./london-time.js?v=9";
 import { bindAutoDate, createViewController } from "./view-date.js?v=9";
-import { pageModel } from "./page-model.js?v=9";
+import { pageModel } from "./page-model.js?v=12";
 import { renderDayNav, renderMain, renderSync, renderWeekNav } from "./render.js?v=9";
 import {
   addActivity,

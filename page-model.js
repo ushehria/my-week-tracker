@@ -1,4 +1,4 @@
-import { dayView } from "./day-view.js?v=9";
+import { dayView } from "./day-view.js?v=12";
 import {
   addCalendarDays,
   formatDayLabel,

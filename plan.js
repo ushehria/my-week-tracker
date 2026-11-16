@@ -61,13 +61,22 @@ export const PLAN = {
     },
   },
   days: {
-    mon: { layout: "focus4" },
-    tue: { layout: "focus4" },
-    wed: { layout: "focus4" },
-    thu: { layout: "focus4" },
-    fri: { layout: "focus4" },
+    mon: { layout: "weekday" },
+    tue: { layout: "weekday" },
+    wed: { layout: "weekday" },
+    thu: { layout: "weekday" },
+    fri: { layout: "weekday" },
     sat: { layout: "open" },
     sun: { layout: "weekday" },
+  },
+  weeks: {
+    "2026-11-16": {
+      mon: { layout: "focus4" },
+      tue: { layout: "focus4" },
+      wed: { layout: "focus4" },
+      thu: { layout: "focus4" },
+      fri: { layout: "focus4" },
+    },
   },
   habits: [
     { id: "fajr", label: "Fajr", time: "~5:45", band: "Morning" },

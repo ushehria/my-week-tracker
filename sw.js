@@ -1,4 +1,4 @@
-const CACHE = "my-week-shell-v11";
+const CACHE = "my-week-shell-v12";
 const SHELL = [
   "./",
   "./index.html",
