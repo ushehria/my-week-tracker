@@ -83,7 +83,7 @@ test("unsigned sync does not send, and a duplicate revision counts as stored", a
   });
   assert.equal(calls, 0);
   assert.equal(unsigned.status, "unsigned");
-  assert.equal(syncStatusLabel("unsigned"), "Sync off. Not signed in. Logs stay on this phone.");
+  assert.equal(syncStatusLabel("unsigned"), "Signed out — tap to sign in again");
   assert.equal(liveSyncStatus(state, null), "unsigned");
 
   const urls = [];

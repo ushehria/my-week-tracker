@@ -1,7 +1,7 @@
 import { PLAN } from "./plan.js?v=12";
 import { LEGACY_PLAN } from "./legacy-plan.js?v=9";
 import { SYNC_OWNER_EMAIL } from "./sync-public.js?v=9";
-import { queueBootstrap, queueChanges } from "./sync-queue.js?v=9";
+import { BACKFILL_WEEKS, queueBootstrap, queueChanges, queueMissingWeeks } from "./sync-queue.js?v=13";
 import { weekSummary } from "./week-summary.js?v=9";
 import { addCalendarDays, weekDates } from "./london-time.js?v=9";
 import { bindAutoDate, createViewController } from "./view-date.js?v=9";
@@ -27,7 +27,10 @@ import {
   shouldAskCall,
 } from "./store.js?v=9";
 import {
+  describeSync,
+  ensureFreshSession,
   liveSyncStatus,
+  loadServerRevisions,
   pushSupabase,
   readSession,
   requestEmailCode,
@@ -35,7 +38,7 @@ import {
   signInFailure,
   verifyMagicLink,
   writeSession,
-} from "./sync.js?v=9";
+} from "./sync.js?v=13";
 
 export function startApp(doc, options = {}) {
   const view = doc.defaultView;
@@ -81,6 +84,7 @@ export function startApp(doc, options = {}) {
     current.showSignIn = !session;
     current.syncEmail = SYNC_OWNER_EMAIL;
     current.syncMessage = syncMessage;
+    current.syncLabel = describeSync({ session, state, now: now().getTime() });
     return current;
   }
 
@@ -395,6 +399,19 @@ export function startApp(doc, options = {}) {
     },
   });
 
+  // iOS suspends timers while the Home Screen app is hidden, so refresh and retry when it is visible again.
+  doc.addEventListener("visibilitychange", () => {
+    if (doc.visibilityState === "visible") void flushSync();
+  });
+  doc.addEventListener("pageshow", () => {
+    void flushSync();
+  });
+  if (view.addEventListener) {
+    view.addEventListener("online", () => {
+      void flushSync();
+    });
+  }
+
   if (readSession(storage)) {
     state = queueBootstrap(state, {
       nowIso: now().toISOString(),
@@ -471,14 +488,40 @@ export function startApp(doc, options = {}) {
       do {
         flushAgain = false;
         const seen = revision;
-        const snapshot = state;
-        const result = await pushSupabase(snapshot, { session: readSession(storage), fetch: fetchImpl });
+        let session = readSession(storage);
+        if (session) {
+          const fresh = await ensureFreshSession(session, fetchImpl, now().getTime());
+          if (fresh.signedOut) {
+            writeSession(storage, null);
+            session = null;
+          } else if (fresh.session) {
+            writeSession(storage, fresh.session);
+            session = fresh.session;
+          }
+        }
+        if (session && !state.sync?.backfillDone) {
+          const remote = await loadServerRevisions(session, fetchImpl, BACKFILL_WEEKS);
+          if (remote.ok) {
+            state = queueMissingWeeks(state, remote.rows, now().toISOString());
+            saveState(storage, state);
+          }
+        }
+        const result = await pushSupabase(state, { session, fetch: fetchImpl, now: now().getTime() });
         if (seen !== revision) {
           flushAgain = true;
           continue;
         }
-        if (result.status === "unsigned") continue;
+        if (result.signedOut) writeSession(storage, null);
+        else if (result.session) writeSession(storage, result.session);
+        if (result.status === "unsigned") {
+          draw();
+          continue;
+        }
         state = result.state;
+        if (result.status === "ready") {
+          if (!state.sync) state.sync = { bootstrapped: false, mirror: {}, outbox: [], planQueued: {} };
+          state.sync.lastSyncedAt = now().toISOString();
+        }
         saveState(storage, state);
         draw();
       } while (flushAgain);

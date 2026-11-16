@@ -29,6 +29,44 @@ export function queueChanges(state, nowIso, createId = createRevisionId) {
   return next;
 }
 
+export const BACKFILL_WEEKS = ["2026-11-09", "2026-11-16"];
+
+export function queueMissingWeeks(state, serverRows, nowIso, createId = createRevisionId) {
+  const next = structuredClone(state);
+  const sync = ensureSync(next);
+  if (sync.backfillDone) return next;
+  const latest = new Map();
+  for (const row of serverRows || []) {
+    if (row.deleted) continue;
+    const key = `${row.week_start}|${row.entry_date}|${row.field_key}`;
+    const time = row.client_updated_at || row.received_at || "";
+    const prev = latest.get(key);
+    if (!prev || time >= prev.time) latest.set(key, { time, value: row.value });
+  }
+  const pending = new Set(
+    sync.outbox
+      .filter((item) => !item.acked && item.row)
+      .map((item) => `${item.row.week_start}|${item.row.entry_date}|${item.row.field_key}`),
+  );
+  for (const [key, spec] of Object.entries(fieldMap(next))) {
+    if (!BACKFILL_WEEKS.includes(spec.week_start)) continue;
+    const encoded = JSON.stringify(spec.value);
+    if (pending.has(key)) {
+      sync.mirror[key] = { encoded, deleted: false };
+      continue;
+    }
+    const remote = latest.get(key);
+    if (remote && JSON.stringify(remote.value) === encoded) {
+      sync.mirror[key] = { encoded, deleted: false };
+      continue;
+    }
+    pushRevision(sync, spec, false, nowIso, createId);
+    sync.mirror[key] = { encoded, deleted: false };
+  }
+  sync.backfillDone = true;
+  return next;
+}
+
 export function queueBootstrap(state, { nowIso, legacyRaw, plan, createId = createRevisionId }) {
   let next = queueChanges(state, nowIso, createId);
   const sync = ensureSync(next);

@@ -37,7 +37,7 @@ export function normalizeConfig(config) {
 }
 
 export function syncStatusLabel(status) {
-  if (status === "unsigned") return "Sync off. Not signed in. Logs stay on this phone.";
+  if (status === "unsigned") return "Signed out — tap to sign in again";
   if (status === "failed") return "Sync failed. Logs stay on this phone.";
   if (status === "pending") return "Sync pending. Logs stay on this phone.";
   if (status === "acked") return "Sync finished. Logs stay on this phone.";
@@ -123,6 +123,78 @@ export function readSession(storage) {
 export function writeSession(storage, session) {
   if (!session) storage.removeItem(SESSION_KEY);
   else storage.setItem(SESSION_KEY, JSON.stringify(session));
+}
+
+const REFRESH_SKEW_MS = 60_000;
+
+export function sessionExpiryMs(session) {
+  const raw = Number(session?.expires_at);
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return raw > 1e12 ? raw : raw * 1000;
+}
+
+export function sessionNeedsRefresh(session, now = Date.now()) {
+  if (!session?.refresh_token) return false;
+  const expiry = sessionExpiryMs(session);
+  if (!expiry) return false;
+  return now >= expiry - REFRESH_SKEW_MS;
+}
+
+export function describeSync({ session, state, now }) {
+  if (!session?.access_token || !session?.user?.id) return "Signed out — tap to sign in again";
+  const pending = (state?.sync?.outbox || []).filter((item) => !item.acked).length;
+  if (pending > 0) return `${pending} waiting to sync`;
+  const syncedAt = Date.parse(state?.sync?.lastSyncedAt || "");
+  if (Number.isFinite(syncedAt)) {
+    const mins = Math.max(0, Math.round((now - syncedAt) / 60000));
+    if (mins < 1) return "Synced just now";
+    if (mins === 1) return "Synced 1 min ago";
+    return `Synced ${mins} min ago`;
+  }
+  return "Sync on. Nothing waiting. Logs stay on this phone.";
+}
+
+export async function refreshSession(session, fetchImpl) {
+  if (!session?.refresh_token) return { ok: false, reason: "signed_out", session: null };
+  let response;
+  try {
+    response = await fetchImpl(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: "POST",
+      redirect: "error",
+      headers: {
+        apikey: SUPABASE_PUBLISHABLE_KEY,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ refresh_token: session.refresh_token }),
+    });
+  } catch {
+    return { ok: false, reason: "network", session };
+  }
+  if (!response.ok) {
+    if (response.status >= 500) return { ok: false, reason: "rejected", session };
+    return { ok: false, reason: "signed_out", session: null };
+  }
+  const next = await response.json();
+  if (!next?.access_token || !next?.refresh_token || !(next.user?.id || session.user?.id)) {
+    return { ok: false, reason: "signed_out", session: null };
+  }
+  return {
+    ok: true,
+    session: {
+      ...session,
+      ...next,
+      user: next.user || session.user,
+    },
+  };
+}
+
+export async function ensureFreshSession(session, fetchImpl, now = Date.now()) {
+  if (!session?.access_token || !session?.user?.id) return { session: null };
+  if (!sessionNeedsRefresh(session, now)) return { session };
+  const refreshed = await refreshSession(session, fetchImpl);
+  if (!refreshed.ok && refreshed.reason === "network") return { session, offline: true };
+  if (!refreshed.ok) return { session: null, signedOut: true };
+  return { session: refreshed.session };
 }
 
 export function liveSyncStatus(state, session) {
@@ -233,51 +305,113 @@ export async function verifyMagicLink(link, fetchImpl) {
   return { ok: true, reason: "accepted", session };
 }
 
-export async function pushSupabase(state, { session, fetch: fetchImpl }) {
-  if (!session?.access_token || !session?.user?.id) return { status: "unsigned", state };
-  const next = structuredClone(state);
-  const outbox = next.sync?.outbox || [];
-  for (const item of outbox) {
-    if (item.acked) continue;
-    if (item.table !== "entry_revisions" && item.table !== "client_snapshots") {
-      item.lastError = "Sync failed";
-      return { status: "failed", state: next };
-    }
+export async function loadServerRevisions(session, fetchImpl, weeks) {
+  const rows = [];
+  let offset = 0;
+  while (offset < 5000) {
+    const url = `${SUPABASE_URL}/rest/v1/entry_revisions?select=week_start,entry_date,field_key,value,client_updated_at,deleted&week_start=in.(${weeks.join(",")})&order=client_updated_at.asc&limit=1000&offset=${offset}`;
     let response;
     try {
-      response = await fetchImpl(`${SUPABASE_URL}/rest/v1/${item.table}`, {
-        method: "POST",
+      response = await fetchImpl(url, {
+        method: "GET",
         redirect: "error",
         headers: {
           apikey: SUPABASE_PUBLISHABLE_KEY,
           authorization: `Bearer ${session.access_token}`,
-          "content-type": "application/json",
-          prefer: "return=minimal",
+          accept: "application/json",
         },
-        body: JSON.stringify(item.row),
       });
     } catch {
-      item.lastError = "Sync failed";
-      return { status: "failed", state: next };
+      return { ok: false, reason: "network", rows: [] };
     }
-    if (!(await accepted(response))) {
+    if (response.status === 401) return { ok: false, reason: "unauthorized", rows: [] };
+    if (!response.ok) return { ok: false, reason: "failed", rows: [] };
+    const page = await response.json();
+    if (!Array.isArray(page)) return { ok: false, reason: "failed", rows: [] };
+    rows.push(...page);
+    if (page.length < 1000) return { ok: true, rows };
+    offset += page.length;
+  }
+  return { ok: true, rows };
+}
+
+export async function pushSupabase(state, { session, fetch: fetchImpl, now = Date.now() }) {
+  let current = session;
+  if (!current?.access_token || !current?.user?.id) return { status: "unsigned", state, session: null };
+  if (sessionNeedsRefresh(current, now)) {
+    const refreshed = await refreshSession(current, fetchImpl);
+    if (!refreshed.ok && refreshed.reason === "network") return { status: "failed", state, session: current };
+    if (!refreshed.ok) return { status: "unsigned", signedOut: true, state, session: null };
+    current = refreshed.session;
+  }
+  const next = structuredClone(state);
+  const outbox = next.sync?.outbox || [];
+  let authRetried = false;
+  for (const item of outbox) {
+    if (item.acked) continue;
+    if (item.table !== "entry_revisions" && item.table !== "client_snapshots") {
       item.lastError = "Sync failed";
-      return { status: "failed", state: next };
+      return { status: "failed", state: next, session: current };
+    }
+    let outcome = await postRow(item, current.access_token, fetchImpl);
+    if (outcome.auth && !authRetried && current.refresh_token) {
+      authRetried = true;
+      const refreshed = await refreshSession(current, fetchImpl);
+      if (!refreshed.ok && refreshed.reason === "network") {
+        item.lastError = "Sync failed";
+        return { status: "failed", state: next, session: current };
+      }
+      if (!refreshed.ok) return { status: "unsigned", signedOut: true, state: next, session: null };
+      current = refreshed.session;
+      outcome = await postRow(item, current.access_token, fetchImpl);
+    }
+    if (outcome.network) {
+      item.lastError = "Sync failed";
+      return { status: "failed", state: next, session: current };
+    }
+    if (!outcome.ok) {
+      item.lastError = "Sync failed";
+      return { status: "failed", state: next, session: current };
     }
     item.acked = true;
     item.lastError = null;
   }
   if (next.sync) next.sync.outbox = outbox.filter((item) => !item.acked);
-  return { status: next.sync?.outbox?.length ? "pending" : "ready", state: next };
+  return { status: next.sync?.outbox?.length ? "pending" : "ready", state: next, session: current };
 }
 
-async function accepted(response) {
-  if (response.ok) return true;
-  let body = {};
+async function postRow(item, accessToken, fetchImpl) {
+  let response;
   try {
-    body = await response.json();
+    response = await fetchImpl(`${SUPABASE_URL}/rest/v1/${item.table}`, {
+      method: "POST",
+      redirect: "error",
+      headers: {
+        apikey: SUPABASE_PUBLISHABLE_KEY,
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+        prefer: "return=minimal",
+      },
+      body: JSON.stringify(item.row),
+    });
   } catch {
-    body = {};
+    return { ok: false, network: true };
   }
-  return response.status === 409 || body.code === "23505";
+  const body = await readBody(response);
+  if (response.ok || response.status === 409 || body.code === "23505") return { ok: true };
+  return { ok: false, auth: isAuthFailure(response, body) };
+}
+
+function isAuthFailure(response, body) {
+  if (response.status === 401) return true;
+  const text = `${body.error_code || ""} ${body.error || ""} ${body.msg || ""} ${body.message || ""}`.toLowerCase();
+  return text.includes("jwt") && (text.includes("expired") || text.includes("invalid"));
+}
+
+async function readBody(response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
 }

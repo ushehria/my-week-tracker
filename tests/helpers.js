@@ -7,6 +7,9 @@ export function memoryStorage(initial = {}) {
     setItem(key, value) {
       data[key] = String(value);
     },
+    removeItem(key) {
+      delete data[key];
+    },
     dump() {
       return { ...data };
     },
@@ -23,6 +26,12 @@ export function readOnlyLegacyStorage(initial, legacyKey) {
         throw new Error(`Refusing to write legacy key ${legacyKey}`);
       }
       storage.setItem(key, value);
+    },
+    removeItem(key) {
+      if (key === legacyKey) {
+        throw new Error(`Refusing to write legacy key ${legacyKey}`);
+      }
+      storage.removeItem(key);
     },
     dump: () => storage.dump(),
     legacyRaw: raw,
